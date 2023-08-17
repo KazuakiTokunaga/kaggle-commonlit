@@ -237,3 +237,8 @@ def main():
     #summaries_train = summaries_train.head(10) # for dev mode
 
     preprocessor = Preprocessor(model_name=CFG.model_name)
+
+    train = preprocessor.run(prompts_train, summaries_train, mode="train")
+    test = preprocessor.run(prompts_test, summaries_test, mode="test")
+
+    return train, test
