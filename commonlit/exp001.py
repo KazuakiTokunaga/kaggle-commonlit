@@ -568,7 +568,7 @@ def main():
     sample_submission = pd.read_csv(DATA_DIR + "sample_submission.csv")
 
 
-    summaries_train = summaries_train.head(10) # for dev mode
+    summaries_train = summaries_train.head(1000) # for dev mode
 
     preprocessor = Preprocessor(model_name=CFG.model_name)
 
