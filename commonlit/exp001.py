@@ -240,7 +240,6 @@ def compt_score(content_true, content_pred, wording_true, wording_pred):
     
     return (content_score + wording_score)/2
 
-
 class ContentScoreRegressor:
     def __init__(self, 
                 model_name: str,
@@ -469,7 +468,6 @@ def train_by_fold(
             num_train_epochs=num_train_epochs,
             save_steps=save_steps,
         )
-
 
 def validate(
     train_df: pd.DataFrame,
