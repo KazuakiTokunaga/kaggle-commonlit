@@ -24,7 +24,6 @@ from nltk.tokenize.treebank import TreebankWordDetokenizer
 from collections import Counter
 import spacy
 import re
-from autocorrect import Speller
 from spellchecker import SpellChecker
 import lightgbm as lgb
 
