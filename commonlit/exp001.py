@@ -573,7 +573,7 @@ class Runner():
         self.sample_submission = pd.read_csv(DATA_DIR + "sample_submission.csv")
 
 
-        self.summaries_train = self.summaries_train.head(1000) # for dev mode
+        self.summaries_train = self.summaries_train.head(100) # for dev mode
 
         preprocessor = Preprocessor(model_name=CFG.model_name)
 
