@@ -547,184 +547,200 @@ def predict(
     return test_df
 
 
-def main():
-    # logging setting 
+class Runner():
 
-    warnings.simplefilter("ignore")
-    logging.disable(logging.ERROR)
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-    disable_progress_bar()
-    tqdm.pandas()
+    def __init__(
+        self,
+    )
 
-    seed_everything(seed=42)
+    def run(self):
 
-    DATA_DIR = "/kaggle/input/commonlit-evaluate-student-summaries/"
+        warnings.simplefilter("ignore")
+        logging.disable(logging.ERROR)
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+        disable_progress_bar()
+        tqdm.pandas()
 
-    prompts_train = pd.read_csv(DATA_DIR + "prompts_train.csv")
-    prompts_test = pd.read_csv(DATA_DIR + "prompts_test.csv")
-    summaries_train = pd.read_csv(DATA_DIR + "summaries_train.csv")
-    summaries_test = pd.read_csv(DATA_DIR + "summaries_test.csv")
-    sample_submission = pd.read_csv(DATA_DIR + "sample_submission.csv")
+        seed_everything(seed=42)
+
+        DATA_DIR = "/kaggle/input/commonlit-evaluate-student-summaries/"
+
+        self.prompts_train = pd.read_csv(DATA_DIR + "prompts_train.csv")
+        self.prompts_test = pd.read_csv(DATA_DIR + "prompts_test.csv")
+        self.summaries_train = pd.read_csv(DATA_DIR + "summaries_train.csv")
+        self.summaries_test = pd.read_csv(DATA_DIR + "summaries_test.csv")
+        self.sample_submission = pd.read_csv(DATA_DIR + "sample_submission.csv")
 
 
-    summaries_train = summaries_train.head(1000) # for dev mode
+        self.summaries_train = self.summaries_train.head(1000) # for dev mode
 
-    preprocessor = Preprocessor(model_name=CFG.model_name)
+        preprocessor = Preprocessor(model_name=CFG.model_name)
 
-    train = preprocessor.run(prompts_train, summaries_train, mode="train")
-    test = preprocessor.run(prompts_test, summaries_test, mode="test")
+        self.train = preprocessor.run(self.prompts_train, summaries_train, mode="train")
+        self.test = preprocessor.run(self.prompts_test, summaries_test, mode="test")
 
-    gkf = GroupKFold(n_splits=CFG.n_splits)
+        gkf = GroupKFold(n_splits=CFG.n_splits)
 
-    for i, (_, val_index) in enumerate(gkf.split(train, groups=train["prompt_id"])):
-        train.loc[val_index, "fold"] = i
+        for i, (_, val_index) in enumerate(gkf.split(self.train, groups=self.train["prompt_id"])):
+            self.train.loc[val_index, "fold"] = i
 
-    for target in ["content", "wording"]:
-        train_by_fold(
-            train,
-            model_name=CFG.model_name,
-            save_each_model=False,
-            target=target,
-            learning_rate=CFG.learning_rate,
-            hidden_dropout_prob=CFG.hidden_dropout_prob,
-            attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-            weight_decay=CFG.weight_decay,
-            num_train_epochs=CFG.num_train_epochs,
-            n_splits=CFG.n_splits,
-            batch_size=CFG.batch_size,
-            save_steps=CFG.save_steps,
-            max_length=CFG.max_length
-        )
-        
-        
-        train = validate(
-            train,
-            target=target,
-            save_each_model=False,
-            model_name=CFG.model_name,
-            hidden_dropout_prob=CFG.hidden_dropout_prob,
-            attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-            max_length=CFG.max_length
-        )
-
-        rmse = mean_squared_error(train[target], train[f"{target}_pred"], squared=False)
-        print(f"cv {target} rmse: {rmse}")
-
-        test = predict(
-            test,
-            target=target,
-            save_each_model=False,
-            model_name=CFG.model_name,
-            hidden_dropout_prob=CFG.hidden_dropout_prob,
-            attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-            max_length=CFG.max_length
-        )
-
-    targets = ["content", "wording"]
-
-    drop_columns = ["fold", "student_id", "prompt_id", "text", 
-                    "prompt_question", "prompt_title", 
-                    "prompt_text"
-                ] + targets
-
-    model_dict = {}
-
-    for target in targets:
-        models = []
-        
-        for fold in range(CFG.n_splits):
-
-            X_train_cv = train[train["fold"] != fold].drop(columns=drop_columns)
-            y_train_cv = train[train["fold"] != fold][target]
-
-            X_eval_cv = train[train["fold"] == fold].drop(columns=drop_columns)
-            y_eval_cv = train[train["fold"] == fold][target]
-
-            dtrain = lgb.Dataset(X_train_cv, label=y_train_cv)
-            dval = lgb.Dataset(X_eval_cv, label=y_eval_cv)
-
-            params = {
-                    'boosting_type': 'gbdt',
-                    'random_state': 42,
-                    'objective': 'regression',
-                    'metric': 'rmse',
-                    'learning_rate': 0.05,
-                    }
-
-            evaluation_results = {}
-            model = lgb.train(params,
-                            num_boost_round=10000,
-                                #categorical_feature = categorical_features,
-                            valid_names=['train', 'valid'],
-                            train_set=dtrain,
-                            valid_sets=dval,
-                            callbacks=[
-                                lgb.early_stopping(stopping_rounds=30, verbose=True),
-                                lgb.log_evaluation(100),
-                                lgb.callback.record_evaluation(evaluation_results)
-                                ],
-                            )
-            models.append(model)
-        
-        model_dict[target] = models
-
-    # cv
-    rmses = []
-
-    for target in targets:
-        models = model_dict[target]
-
-        preds = []
-        trues = []
-        
-        for fold, model in enumerate(models):
-            # ilocで取り出す行を指定
-            X_eval_cv = train[train["fold"] == fold].drop(columns=drop_columns)
-            y_eval_cv = train[train["fold"] == fold][target]
-
-            pred = model.predict(X_eval_cv)
-
-            trues.extend(y_eval_cv)
-            preds.extend(pred)
+        for target in ["content", "wording"]:
+            train_by_fold(
+                self.train,
+                model_name=CFG.model_name,
+                save_each_model=False,
+                target=target,
+                learning_rate=CFG.learning_rate,
+                hidden_dropout_prob=CFG.hidden_dropout_prob,
+                attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
+                weight_decay=CFG.weight_decay,
+                num_train_epochs=CFG.num_train_epochs,
+                n_splits=CFG.n_splits,
+                batch_size=CFG.batch_size,
+                save_steps=CFG.save_steps,
+                max_length=CFG.max_length
+            )
             
-        rmse = np.sqrt(mean_squared_error(trues, preds))
-        print(f"{target}_rmse : {rmse}")
-        rmses = rmses + [rmse]
+            
+            self.train = validate(
+                self.train,
+                target=target,
+                save_each_model=False,
+                model_name=CFG.model_name,
+                hidden_dropout_prob=CFG.hidden_dropout_prob,
+                attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
+                max_length=CFG.max_length
+            )
 
-    print(f"mcrmse : {sum(rmses) / len(rmses)}")
+            rmse = mean_squared_error(self.train[target], self.train[f"{target}_pred"], squared=False)
+            print(f"cv {target} rmse: {rmse}")
 
-    drop_columns = [
-                    #"fold", 
-                    "student_id", "prompt_id", "text", 
-                    "prompt_question", "prompt_title", 
-                    "prompt_text",
-                    "input"
-                ] + [
-                    f"content_pred_{i}" for i in range(CFG.n_splits)
+            self.test = predict(
+                self.test,
+                target=target,
+                save_each_model=False,
+                model_name=CFG.model_name,
+                hidden_dropout_prob=CFG.hidden_dropout_prob,
+                attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
+                max_length=CFG.max_length
+            )
+
+        targets = ["content", "wording"]
+
+        drop_columns = ["fold", "student_id", "prompt_id", "text", 
+                        "prompt_question", "prompt_title", 
+                        "prompt_text"
+                    ] + targets
+
+        model_dict = {}
+
+        for target in targets:
+            models = []
+            
+            for fold in range(CFG.n_splits):
+
+                X_train_cv = self.train[self.train["fold"] != fold].drop(columns=drop_columns)
+                y_train_cv = self.train[self.train["fold"] != fold][target]
+
+                X_eval_cv = self.train[self.train["fold"] == fold].drop(columns=drop_columns)
+                y_eval_cv = self.train[self.train["fold"] == fold][target]
+
+                dtrain = lgb.Dataset(X_train_cv, label=y_train_cv)
+                dval = lgb.Dataset(X_eval_cv, label=y_eval_cv)
+
+                params = {
+                        'boosting_type': 'gbdt',
+                        'random_state': 42,
+                        'objective': 'regression',
+                        'metric': 'rmse',
+                        'learning_rate': 0.05,
+                        }
+
+                evaluation_results = {}
+                model = lgb.train(params,
+                                num_boost_round=10000,
+                                    #categorical_feature = categorical_features,
+                                valid_names=['train', 'valid'],
+                                train_set=dtrain,
+                                valid_sets=dval,
+                                callbacks=[
+                                    lgb.early_stopping(stopping_rounds=30, verbose=True),
+                                    lgb.log_evaluation(100),
+                                    lgb.callback.record_evaluation(evaluation_results)
+                                    ],
+                                )
+                models.append(model)
+            
+            model_dict[target] = models
+
+        # cv
+        rmses = []
+
+        for target in targets:
+            models = model_dict[target]
+
+            preds = []
+            trues = []
+            
+            for fold, model in enumerate(models):
+                # ilocで取り出す行を指定
+                X_eval_cv = self.train[self.train["fold"] == fold].drop(columns=drop_columns)
+                y_eval_cv = self.train[self.train["fold"] == fold][target]
+
+                pred = model.predict(X_eval_cv)
+
+                trues.extend(y_eval_cv)
+                preds.extend(pred)
+                
+            rmse = np.sqrt(mean_squared_error(trues, preds))
+            print(f"{target}_rmse : {rmse}")
+            rmses = rmses + [rmse]
+
+        print(f"mcrmse : {sum(rmses) / len(rmses)}")
+
+        drop_columns = [
+                        #"fold", 
+                        "student_id", "prompt_id", "text", 
+                        "prompt_question", "prompt_title", 
+                        "prompt_text",
+                        "input"
                     ] + [
-                    f"wording_pred_{i}" for i in range(CFG.n_splits)
-                    ]
+                        f"content_pred_{i}" for i in range(CFG.n_splits)
+                        ] + [
+                        f"wording_pred_{i}" for i in range(CFG.n_splits)
+                        ]
 
-    pred_dict = {}
-    for target in targets:
-        models = model_dict[target]
-        preds = []
+        pred_dict = {}
+        for target in targets:
+            models = model_dict[target]
+            preds = []
 
-        for fold, model in enumerate(models):
-            # ilocで取り出す行を指定
-            X_eval_cv = test.drop(columns=drop_columns)
+            for fold, model in enumerate(models):
+                # ilocで取り出す行を指定
+                X_eval_cv = self.test.drop(columns=drop_columns)
 
-            pred = model.predict(X_eval_cv)
-            preds.append(pred)
-        
-        pred_dict[target] = preds
+                pred = model.predict(X_eval_cv)
+                preds.append(pred)
+            
+            pred_dict[target] = preds
 
-    for target in targets:
-        preds = pred_dict[target]
-        for i, pred in enumerate(preds):
-            test[f"{target}_pred_{i}"] = pred
+        for target in targets:
+            preds = pred_dict[target]
+            for i, pred in enumerate(preds):
+                self.test[f"{target}_pred_{i}"] = pred
 
-        test[target] = test[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+            self.test[target] = self.test[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
 
-    test[["student_id", "content", "wording"]].to_csv("submission.csv", index=False)
+        self.test[["student_id", "content", "wording"]].to_csv("submission.csv", index=False)
+
+
+
+
+def main():
+
+    runner = Runner()
+    runner.run()
+
+    return runner
+
