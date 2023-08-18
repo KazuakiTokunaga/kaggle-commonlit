@@ -574,6 +574,8 @@ class Runner():
 
         seed_everything(seed=42)
 
+        self.targets = ["content", "wording"]
+
 
     def load_dataset(self):
 
@@ -604,7 +606,7 @@ class Runner():
         for i, (_, val_index) in enumerate(gkf.split(self.train, groups=self.train["prompt_id"])):
             self.train.loc[val_index, "fold"] = i
 
-        for target in ["content", "wording"]:
+        for target in self.targets:
             train_by_fold(
                 self.train,
                 model_name=CFG.model_name,
@@ -647,15 +649,14 @@ class Runner():
 
     def run_lgbm(self):
         
-        targets = ["content", "wording"]
         drop_columns = ["fold", "student_id", "prompt_id", "text", "fixed_summary_text",
                         "prompt_question", "prompt_title", 
                         "prompt_text"
-                    ] + targets
+                    ] + self.targets
         
-        model_dict = {}
+        self.model_dict = {}
 
-        for target in targets:
+        for target in self.targets:
             models = []
             
             for fold in range(CFG.n_splits):
@@ -692,13 +693,13 @@ class Runner():
                                 )
                 models.append(model)
             
-            model_dict[target] = models
+            self.model_dict[target] = models
 
         # cv
         rmses = []
 
-        for target in targets:
-            models = model_dict[target]
+        for target in self.targets:
+            models = self.model_dict[target]
 
             preds = []
             trues = []
@@ -735,8 +736,8 @@ class Runner():
                         ]
 
         pred_dict = {}
-        for target in targets:
-            models = model_dict[target]
+        for target in self.targets:
+            models = self.model_dict[target]
             preds = []
 
             for fold, model in enumerate(models):
@@ -748,7 +749,7 @@ class Runner():
             
             pred_dict[target] = preds
 
-        for target in targets:
+        for target in self.targets:
             preds = pred_dict[target]
             for i, pred in enumerate(preds):
                 self.test[f"{target}_pred_{i}"] = pred
