@@ -578,8 +578,8 @@ class Runner():
 
         preprocessor = Preprocessor(model_name=CFG.model_name)
 
-        self.train = preprocessor.run(self.prompts_train, summaries_train, mode="train")
-        self.test = preprocessor.run(self.prompts_test, summaries_test, mode="test")
+        self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
+        self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
 
         gkf = GroupKFold(n_splits=CFG.n_splits)
 
