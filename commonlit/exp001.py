@@ -5,6 +5,7 @@ import warnings
 import logging
 import os
 import random
+import pickle
 import shutil
 import json
 import transformers
@@ -49,6 +50,7 @@ class RunConfig:
     debug_size=10
     train=True
     predict=True
+    gbtmodelpath="gbtmodel"
 
 
 # set random seed
@@ -581,6 +583,11 @@ class Runner():
 
         self.targets = ["content", "wording"]
 
+        # delete old model files
+        if os.path.exists(RunConfig.gbtmodelpath):
+            shutil.rmtree(RunConfig.gbtmodelpath)
+        os.mkdir(RunConfig.gbtmodelpath)
+
 
     def load_dataset(self):
 
@@ -737,7 +744,7 @@ class Runner():
         print(f"mcrmse : {sum(rmses) / len(rmses)}")
 
 
-        with open('gbtmodel/model_dict.pkl', 'wb') as f:
+        with open(f'{RunConfig.gbtmodelpath}/model_dict.pkl', 'wb') as f:
             pickle.dump(model_dict, f)
 
 
@@ -746,7 +753,7 @@ class Runner():
         if not RunConfig.predict:
             return None
 
-        with open('gbtmodel/model_dict.pkl', 'wb') as f:
+        with open(f'{RunConfig.gbtmodelpath}/model_dict.pkl', 'wb') as f:
             self.model_dict = pickle.load(f)
 
         drop_columns = [
