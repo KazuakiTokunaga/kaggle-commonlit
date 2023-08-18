@@ -714,7 +714,7 @@ class Runner():
 
         drop_columns = [
                         #"fold", 
-                        "student_id", "prompt_id", "text", 
+                        "student_id", "prompt_id", "text",  "fixed_summary_text",
                         "prompt_question", "prompt_title", 
                         "prompt_text",
                         "input"
