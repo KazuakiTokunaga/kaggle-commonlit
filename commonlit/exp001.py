@@ -745,7 +745,7 @@ class Runner():
 
 
         with open(f'{RunConfig.gbtmodelpath}/model_dict.pkl', 'wb') as f:
-            pickle.dump(model_dict, f)
+            pickle.dump(self.model_dict, f)
 
 
     def create_prediction(self):
