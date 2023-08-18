@@ -1,6 +1,6 @@
 from typing import List
-import numpy as np # linear algebra
-import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+import numpy as np 
+import pandas as pd 
 import warnings
 import logging
 import os
@@ -30,18 +30,6 @@ from spellchecker import SpellChecker
 import lightgbm as lgb
 
 
-# set random seed
-def seed_everything(seed: int):
-    
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
-
-
 class CFG:
     model_name="debertav3base"
     learning_rate=1.5e-5
@@ -54,8 +42,25 @@ class CFG:
     random_seed=42
     save_steps=100
     max_length=512
+
+
+class RunConfig:
     debug=True
     debug_size=10
+    train=True
+    predict=True
+
+
+# set random seed
+def seed_everything(seed: int):
+    
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 
 class Preprocessor:
@@ -587,67 +592,78 @@ class Runner():
         self.summaries_test = pd.read_csv(DATA_DIR + "summaries_test.csv")
         self.sample_submission = pd.read_csv(DATA_DIR + "sample_submission.csv")
 
-        if CFG.debug:
-            self.summaries_train = self.summaries_train.head(CFG.debug_size) # for dev mode
+        if RunConfig.debug:
+            self.summaries_train = self.summaries_train.head(RunConfig.debug_size) # for dev mode
 
 
     def preprocess(self):
 
         preprocessor = Preprocessor(model_name=CFG.model_name)
 
-        self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
-        self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
+        if RunConfig.train:
+            self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
+        
+        if RunConfig.predict:
+            self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
 
 
     def run_transformers_regressor(self):
 
         gkf = GroupKFold(n_splits=CFG.n_splits)
 
-        for i, (_, val_index) in enumerate(gkf.split(self.train, groups=self.train["prompt_id"])):
-            self.train.loc[val_index, "fold"] = i
+        if RunConfig.train:
+            for i, (_, val_index) in enumerate(gkf.split(self.train, groups=self.train["prompt_id"])):
+                self.train.loc[val_index, "fold"] = i
 
         for target in self.targets:
-            train_by_fold(
-                self.train,
-                model_name=CFG.model_name,
-                save_each_model=False,
-                target=target,
-                learning_rate=CFG.learning_rate,
-                hidden_dropout_prob=CFG.hidden_dropout_prob,
-                attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                weight_decay=CFG.weight_decay,
-                num_train_epochs=CFG.num_train_epochs,
-                n_splits=CFG.n_splits,
-                batch_size=CFG.batch_size,
-                save_steps=CFG.save_steps,
-                max_length=CFG.max_length
-            )
+
+            if RunConfig.train:
+                train_by_fold(
+                    self.train,
+                    model_name=CFG.model_name,
+                    save_each_model=False,
+                    target=target,
+                    learning_rate=CFG.learning_rate,
+                    hidden_dropout_prob=CFG.hidden_dropout_prob,
+                    attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
+                    weight_decay=CFG.weight_decay,
+                    num_train_epochs=CFG.num_train_epochs,
+                    n_splits=CFG.n_splits,
+                    batch_size=CFG.batch_size,
+                    save_steps=CFG.save_steps,
+                    max_length=CFG.max_length
+                )
+                
+                self.train = validate(
+                    self.train,
+                    target=target,
+                    save_each_model=False,
+                    model_name=CFG.model_name,
+                    hidden_dropout_prob=CFG.hidden_dropout_prob,
+                    attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
+                    max_length=CFG.max_length
+                )
+
+                rmse = mean_squared_error(self.train[target], self.train[f"{target}_pred"], squared=False)
+                print(f"cv {target} rmse: {rmse}")
             
             
-            self.train = validate(
-                self.train,
-                target=target,
-                save_each_model=False,
-                model_name=CFG.model_name,
-                hidden_dropout_prob=CFG.hidden_dropout_prob,
-                attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                max_length=CFG.max_length
-            )
+            if RunConfig.predict:
 
-            rmse = mean_squared_error(self.train[target], self.train[f"{target}_pred"], squared=False)
-            print(f"cv {target} rmse: {rmse}")
-
-            self.test = predict(
-                self.test,
-                target=target,
-                save_each_model=False,
-                model_name=CFG.model_name,
-                hidden_dropout_prob=CFG.hidden_dropout_prob,
-                attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                max_length=CFG.max_length
-            )
+                self.test = predict(
+                    self.test,
+                    target=target,
+                    save_each_model=False,
+                    model_name=CFG.model_name,
+                    hidden_dropout_prob=CFG.hidden_dropout_prob,
+                    attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
+                    max_length=CFG.max_length
+                )
 
     def run_lgbm(self):
+
+        if not RunConfig.train:
+            return None
         
         drop_columns = ["fold", "student_id", "prompt_id", "text", "fixed_summary_text",
                         "prompt_question", "prompt_title", 
@@ -721,7 +737,17 @@ class Runner():
         print(f"mcrmse : {sum(rmses) / len(rmses)}")
 
 
+        with open('gbtmodel/model_dict.pkl', 'wb') as f:
+            pickle.dump(model_dict, f)
+
+
     def create_prediction(self):
+
+        if not RunConfig.predict:
+            return None
+
+        with open('gbtmodel/model_dict.pkl', 'wb') as f:
+            self.model_dict = pickle.load(f)
 
         drop_columns = [
                         #"fold", 
