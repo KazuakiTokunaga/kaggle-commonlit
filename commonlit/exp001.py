@@ -371,7 +371,7 @@ class ContentScoreRegressor:
             model=model_content,
             args=training_args,
             train_dataset=train_tokenized_datasets,
-            eval_dataset=val_tfdropokenized_datasets,
+            eval_dataset=val_tokenized_datasets,
             tokenizer=self.tokenizer,
             compute_metrics=compute_metrics,
             data_collator=self.data_collator
