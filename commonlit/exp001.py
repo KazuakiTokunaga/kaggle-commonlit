@@ -56,22 +56,17 @@ class CFG:
 
 
 class Preprocessor:
-    def __init__(
-        self, 
-        model_name: str,
-    ) -> None:
-
+    def __init__(self, 
+                model_name: str,
+                ) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(f"/kaggle/input/{model_name}")
+        self.twd = TreebankWordDetokenizer()
         self.STOP_WORDS = set(stopwords.words('english'))
         
         self.spacy_ner_model = spacy.load('en_core_web_sm',)
-        self.speller = SpellChecker() #Speller(lang='en')
+        self.speller = Speller(lang='en')
+        self.spellchecker = SpellChecker() 
         
-    def count_text_length(self, df: pd.DataFrame, col:str) -> pd.Series:
-        """ text length """
-        tokenizer=self.tokenizer
-        return df[col].progress_apply(lambda x: len(tokenizer.encode(x)))
-
     def word_overlap_count(self, row):
         """ intersection(prompt_text, text) """        
         def check_is_stop_word(word):
@@ -90,7 +85,7 @@ class Preprocessor:
         ngrams = zip(*[token[i:] for i in range(n)])
         return [" ".join(ngram) for ngram in ngrams]
 
-    def ngram_co_occurrence(self, row, n: int):
+    def ngram_co_occurrence(self, row, n: int) -> int:
         # Tokenize the original text and summary into words
         original_tokens = row['prompt_tokens']
         summary_tokens = row['summary_tokens']
@@ -150,9 +145,14 @@ class Preprocessor:
     def spelling(self, text):
         
         wordlist=text.split()
-        amount_miss = len(list(self.speller.unknown(wordlist)))
+        amount_miss = len(list(self.spellchecker.unknown(wordlist)))
 
         return amount_miss
+    
+    def add_spelling_dictionary(self, tokens: List[str]) -> List[str]:
+        """dictionary update for pyspell checker and autocorrect"""
+        self.spellchecker.word_frequency.load_words(tokens)
+        self.speller.nlp_data.update({token:1000 for token in tokens})
     
     def run(self, 
             prompts: pd.DataFrame,
@@ -162,27 +162,33 @@ class Preprocessor:
         
         # before merge preprocess
         prompts["prompt_length"] = prompts["prompt_text"].apply(
-            lambda x: len(self.tokenizer.encode(x))
+            lambda x: len(word_tokenize(x))
         )
         prompts["prompt_tokens"] = prompts["prompt_text"].apply(
-            lambda x: self.tokenizer.convert_ids_to_tokens(
-                self.tokenizer.encode(x), 
-                skip_special_tokens=True
-            )
+            lambda x: word_tokenize(x)
         )
 
         summaries["summary_length"] = summaries["text"].apply(
-            lambda x: len(self.tokenizer.encode(x))
+            lambda x: len(word_tokenize(x))
         )
         summaries["summary_tokens"] = summaries["text"].apply(
-            lambda x: self.tokenizer.convert_ids_to_tokens(
-                self.tokenizer.encode(x), 
-                skip_special_tokens=True
-            )
-
+            lambda x: word_tokenize(x)
         )
+        
+        # Add prompt tokens into spelling checker dictionary
+        prompts["prompt_tokens"].apply(
+            lambda x: self.add_spelling_dictionary(x)
+        )
+        
+#         from IPython.core.debugger import Pdb; Pdb().set_trace()
+        # fix misspelling
+        summaries["fixed_summary_text"] = summaries["text"].progress_apply(
+            lambda x: self.speller(x)
+        )
+        
+        # count misspelling
         summaries["splling_err_num"] = summaries["text"].progress_apply(self.spelling)
-
+        
         # merge prompts and summaries
         input_df = summaries.merge(prompts, how="left", on="prompt_id")
 
@@ -193,9 +199,12 @@ class Preprocessor:
         input_df['bigram_overlap_count'] = input_df.progress_apply(
             self.ngram_co_occurrence,args=(2,), axis=1 
         )
+        input_df['bigram_overlap_ratio'] = input_df['bigram_overlap_count'] / (input_df['summary_length'] - 1)
+        
         input_df['trigram_overlap_count'] = input_df.progress_apply(
             self.ngram_co_occurrence, args=(3,), axis=1
         )
+        input_df['trigram_overlap_ratio'] = input_df['trigram_overlap_count'] / (input_df['summary_length'] - 2)
         
         # Crate dataframe with count of each category NERs overlap for all the summaries
         # Because it spends too much time for this feature, I don't use this time.
@@ -249,7 +258,7 @@ class ContentScoreRegressor:
                 attention_probs_dropout_prob: float,
                 max_length: int,
                 ):
-        self.inputs = ["prompt_text", "prompt_title", "prompt_question", "text"]
+        self.inputs = ["prompt_text", "prompt_title", "prompt_question", "fixed_summary_text"]
         self.input_col = "input"
         
         self.text_cols = [self.input_col] 
@@ -311,13 +320,13 @@ class ContentScoreRegressor:
         train_df[self.input_col] = (
                     train_df["prompt_title"] + sep 
                     + train_df["prompt_question"] + sep 
-                    + train_df["text"]
+                    + train_df["fixed_summary_text"]
                   )
 
         valid_df[self.input_col] = (
                     valid_df["prompt_title"] + sep 
                     + valid_df["prompt_question"] + sep 
-                    + valid_df["text"]
+                    + valid_df["fixed_summary_text"]
                   )
         
         train_df = train_df[[self.input_col] + self.target_cols]
@@ -359,7 +368,7 @@ class ContentScoreRegressor:
             model=model_content,
             args=training_args,
             train_dataset=train_tokenized_datasets,
-            eval_dataset=val_tokenized_datasets,
+            eval_dataset=val_tfdropokenized_datasets,
             tokenizer=self.tokenizer,
             compute_metrics=compute_metrics,
             data_collator=self.data_collator
@@ -381,7 +390,7 @@ class ContentScoreRegressor:
         in_text = (
                     test_df["prompt_title"] + sep 
                     + test_df["prompt_question"] + sep 
-                    + test_df["text"]
+                    + test_df["fixed_summary_text"]
                   )
         test_df[self.input_col] = in_text
 
@@ -629,7 +638,7 @@ class Runner():
 
         targets = ["content", "wording"]
 
-        drop_columns = ["fold", "student_id", "prompt_id", "text", 
+        drop_columns = ["fold", "student_id", "prompt_id", "text", "fixed_summary_text",
                         "prompt_question", "prompt_title", 
                         "prompt_text"
                     ] + targets
