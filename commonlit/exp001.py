@@ -753,7 +753,7 @@ class Runner():
         if not RunConfig.predict:
             return None
 
-        with open(f'{RunConfig.gbtmodelpath}/model_dict.pkl', 'wb') as f:
+        with open(f'{RunConfig.gbtmodelpath}/model_dict.pkl', 'rb') as f:
             self.model_dict = pickle.load(f)
 
         drop_columns = [
