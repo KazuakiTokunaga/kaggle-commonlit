@@ -53,6 +53,8 @@ class CFG:
     random_seed=42
     save_steps=100
     max_length=512
+    debug=True
+    debug_size=10
 
 
 class Preprocessor:
@@ -582,8 +584,8 @@ class Runner():
         self.summaries_test = pd.read_csv(DATA_DIR + "summaries_test.csv")
         self.sample_submission = pd.read_csv(DATA_DIR + "sample_submission.csv")
 
-
-        self.summaries_train = self.summaries_train.head(100) # for dev mode
+        if CFG.debug:
+            self.summaries_train = self.summaries_train.head(CFG.debug_size) # for dev mode
 
         preprocessor = Preprocessor(model_name=CFG.model_name)
 
