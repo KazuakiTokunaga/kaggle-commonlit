@@ -564,9 +564,6 @@ class Runner():
     def __init__(
         self,
     ):
-        pass
-
-    def run(self):
 
         warnings.simplefilter("ignore")
         logging.disable(logging.ERROR)
@@ -576,6 +573,9 @@ class Runner():
         tqdm.pandas()
 
         seed_everything(seed=42)
+
+
+    def load_dataset(self):
 
         DATA_DIR = "/kaggle/input/commonlit-evaluate-student-summaries/"
 
@@ -588,10 +588,16 @@ class Runner():
         if CFG.debug:
             self.summaries_train = self.summaries_train.head(CFG.debug_size) # for dev mode
 
+
+    def preprocess(self):
+
         preprocessor = Preprocessor(model_name=CFG.model_name)
 
         self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
         self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
+
+
+    def run_transformers_regressor(self):
 
         gkf = GroupKFold(n_splits=CFG.n_splits)
 
@@ -639,7 +645,9 @@ class Runner():
                 max_length=CFG.max_length
             )
 
-        targets = ["content", "wording"]
+    def run_lgbm(self):
+
+       targets = ["content", "wording"]
 
         drop_columns = ["fold", "student_id", "prompt_id", "text", "fixed_summary_text",
                         "prompt_question", "prompt_title", 
@@ -712,6 +720,9 @@ class Runner():
 
         print(f"mcrmse : {sum(rmses) / len(rmses)}")
 
+
+    def create_prediction(self):
+
         drop_columns = [
                         #"fold", 
                         "student_id", "prompt_id", "text",  "fixed_summary_text",
@@ -746,14 +757,3 @@ class Runner():
             self.test[target] = self.test[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
 
         self.test[["student_id", "content", "wording"]].to_csv("submission.csv", index=False)
-
-
-
-
-def main():
-
-    runner = Runner()
-    runner.run()
-
-    return runner
-
