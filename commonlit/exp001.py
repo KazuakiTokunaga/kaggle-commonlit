@@ -19,6 +19,7 @@ from sklearn.metrics import mean_squared_error
 import torch
 from sklearn.model_selection import KFold, GroupKFold
 from oauth2client.service_account import ServiceAccountCredentials
+import gspread
 from tqdm import tqdm
 
 import nltk
