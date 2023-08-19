@@ -7,6 +7,7 @@ import os
 import random
 import pickle
 import shutil
+import subprocess
 import json
 import datetime
 import transformers
@@ -53,6 +54,7 @@ class RunConfig:
     debug_size=10
     train=True
     predict=True
+    git_commit_hash=""
     trained_model_dir=""
     data_dir="/kaggle/input/commonlit-evaluate-student-summaries/"
     save_to_sheet=True
@@ -101,6 +103,18 @@ class WriteSheet:
         # 辞書のみJSONに変換、ほかはそのままにして、書き込む
         data_json = [json.dumps(d, ensure_ascii=False) if type(d) == dict else d for d in data]
         sheet.append_row(data_json, table_range=table_range)
+
+def get_commit_hash(repo_path='/kaggle/working/kaggle_studentperformance/'):
+
+    wd = os.getcwd()
+    os.chdir(repo_path)
+    
+    cmd = "git show --format='%H' --no-patch"
+    hash_value = subprocess.check_output(cmd.split()).decode('utf-8')[1:-3]
+
+    os.chdir(wd)
+
+    return hash_value
 
 
 # set random seed
@@ -643,6 +657,7 @@ class Runner():
         self.data_to_write = []
 
         if RunConfig.save_to_sheet:
+            self.logger.info('Initializing Google Sheet.')
             self.sheet = WriteSheet(
                 sheet_json_key = RunConfig.sheet_json_key,
                 sheet_key = RunConfig.sheet_key
