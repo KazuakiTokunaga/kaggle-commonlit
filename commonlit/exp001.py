@@ -35,7 +35,7 @@ from spellchecker import SpellChecker
 import lightgbm as lgb
 
 @dataclass
-class CFG:
+class CFG():
     model_name="debertav3base"
     learning_rate=1.5e-5
     weight_decay=0.02
@@ -50,7 +50,7 @@ class CFG:
     save_each_model=True
 
 @dataclass
-class RunConfig:
+class RunConfig():
     debug=True
     debug_size=10
     train=True
