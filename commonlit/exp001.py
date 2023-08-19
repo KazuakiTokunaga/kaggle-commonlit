@@ -19,7 +19,6 @@ from sklearn.metrics import mean_squared_error
 import torch
 from sklearn.model_selection import KFold, GroupKFold
 from oauth2client.service_account import ServiceAccountCredentials
-import gspread
 from tqdm import tqdm
 
 import nltk
@@ -55,9 +54,10 @@ class RunConfig:
     train=True
     predict=True
     trained_model_dir=""
-    data_dir = "/kaggle/input/commonlit-evaluate-student-summaries/"
-    sheet_json_key = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
-    sheet_key = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
+    data_dir="/kaggle/input/commonlit-evaluate-student-summaries/"
+    save_to_sheet=True
+    sheet_json_key='/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
+    sheet_key='1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
 
 
 class Logger:
@@ -85,6 +85,8 @@ class WriteSheet:
         sheet_json_key,
         sheet_key,
     ):
+
+        import gspread
         
         scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
         credentials = ServiceAccountCredentials.from_json_keyfile_name(sheet_json_key, scope)
@@ -639,10 +641,12 @@ class Runner():
         os.mkdir('gbtmodel')
 
         self.data_to_write = []
-        self.write_sheet = WriteSheet(
-            sheet_json_key = RunConfig.sheet_json_key,
-            sheet_key = RunConfig.sheet_key
-        )
+
+        if RunConfig.save_to_sheet:
+            self.sheet = WriteSheet(
+                sheet_json_key = RunConfig.sheet_json_key,
+                sheet_key = RunConfig.sheet_key
+            )
 
     def load_dataset(self):
 
@@ -865,4 +869,4 @@ class Runner():
 
         nowstr_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
         self.data_to_write = [nowstr_jst] + self.data_to_write
-        google_sheet.write(self.data_to_write, sheet_name='cvscores')
+        self.sheet.write(self.data_to_write, sheet_name='cvscores')
