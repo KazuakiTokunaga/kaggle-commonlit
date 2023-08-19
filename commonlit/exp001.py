@@ -54,6 +54,8 @@ class RunConfig:
     predict=True
     trained_model_dir=""
     data_dir = "/kaggle/input/commonlit-evaluate-student-summaries/"
+    sheet_json_key = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
+    sheet_key = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
 
 
 class Logger:
@@ -73,6 +75,28 @@ class Logger:
 
     def now_string(self):
         return str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
+
+
+class WriteSheet:
+
+    def __init__(self, 
+        sheet_json_key,
+        sheet_key,
+    ):
+        
+        scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(sheet_json_key, scope)
+        gc = gspread.authorize(credentials)
+        self.worksheet = gc.open_by_key(sheet_key)
+    
+
+    def write(self, data, sheet_name, table_range='A1'):
+
+        sheet = self.worksheet.worksheet(sheet_name)
+
+        # 辞書のみJSONに変換、ほかはそのままにして、書き込む
+        data_json = [json.dumps(d, ensure_ascii=False) if type(d) == dict else d for d in data]
+        sheet.append_row(data_json, table_range=table_range)
 
 
 # set random seed
@@ -612,6 +636,11 @@ class Runner():
             shutil.rmtree('gbtmodel')
         os.mkdir('gbtmodel')
 
+        self.data_to_write = []
+        self.write_sheet = WriteSheet(
+            sheet_json_key = RunConfig.sheet_json_key,
+            sheet_key = RunConfig.sheet_key
+        )
 
     def load_dataset(self):
 
@@ -682,7 +711,7 @@ class Runner():
 
                 rmse = mean_squared_error(self.train[target], self.train[f"{target}_pred"], squared=False)
                 self.logger.info(f"cv {target} rmse: {rmse}")
-            
+                self.data_to_write.append(rmse)
             
             if RunConfig.predict:
                 
@@ -771,9 +800,12 @@ class Runner():
                 
             rmse = np.sqrt(mean_squared_error(trues, preds))
             self.logger.info(f"{target}_rmse : {rmse}")
+            self.data_to_write.append(rmse)
             rmses = rmses + [rmse]
 
-        self.logger.info(f"mcrmse : {sum(rmses) / len(rmses)}")
+        mcrmse = sum(rmses) / len(rmses)
+        self.logger.info(f"mcrmse : {mcrmse}")
+        self.data_to_write.append(mcrmse)
 
         save_model_path = 'gbtmodel/model_dict.pkl'
         self.logger.info(f'save LGBM model: {save_model_path}')
@@ -824,3 +856,11 @@ class Runner():
             self.test[target] = self.test[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
 
         self.test[["student_id", "content", "wording"]].to_csv("submission.csv", index=False)
+
+
+    def write_sheet(self, ):
+        self.logger.info('Write scores to google sheet.')
+
+        nowstr_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
+        self.data_to_write = [nowstr_jst] + self.data_to_write
+        google_sheet.write(self.data_to_write, sheet_name='cvscores')
