@@ -740,10 +740,9 @@ class Runner():
                                 valid_names=['train', 'valid'],
                                 train_set=dtrain,
                                 valid_sets=dval,
-                                verbose=0,
                                 callbacks=[
                                     lgb.early_stopping(stopping_rounds=30, verbose=False),
-                                    lgb.log_evaluation(100),
+                                    lgb.log_evaluation(0),
                                     lgb.callback.record_evaluation(evaluation_results)
                                     ],
                                 )
