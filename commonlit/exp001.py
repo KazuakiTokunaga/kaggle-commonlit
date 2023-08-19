@@ -8,6 +8,7 @@ import random
 import pickle
 import shutil
 import json
+import datetime
 import transformers
 from transformers import AutoModel, AutoTokenizer, AutoConfig, AutoModelForSequenceClassification
 from transformers import DataCollatorWithPadding
@@ -43,6 +44,7 @@ class CFG:
     random_seed=42
     save_steps=100
     max_length=512
+    save_each_model=True
 
 
 class RunConfig:
@@ -50,7 +52,27 @@ class RunConfig:
     debug_size=10
     train=True
     predict=True
-    gbtmodelpath="gbtmodel"
+    trained_model_dir=""
+    data_dir = "/kaggle/input/commonlit-evaluate-student-summaries/"
+
+
+class Logger:
+
+    def __init__(self, log_path=''):
+        self.general_logger = logging.getLogger('general')
+        stream_handler = logging.StreamHandler()
+        file_general_handler = logging.FileHandler(f'{log_path}general.log')
+        if len(self.general_logger.handlers) == 0:
+            self.general_logger.addHandler(stream_handler)
+            self.general_logger.addHandler(file_general_handler)
+            self.general_logger.setLevel(logging.INFO)
+
+    def info(self, message):
+        # 時刻をつけてコンソールとログに出力
+        self.general_logger.info('[{}] - {}'.format(self.now_string(), message))
+
+    def now_string(self):
+        return str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
 
 
 # set random seed
@@ -436,10 +458,10 @@ class ContentScoreRegressor:
 
 
 def train_by_fold(
+        logger,
         train_df: pd.DataFrame,
         model_name: str,
         target:str,
-        save_each_model: bool,
         n_splits: int,
         batch_size: int,
         learning_rate: int,
@@ -458,12 +480,12 @@ def train_by_fold(
     os.mkdir(model_name)
         
     for fold in range(CFG.n_splits):
-        print(f"fold {fold}:")
+        logger.info(f"fold {fold}:")
         
         train_data = train_df[train_df["fold"] != fold]
         valid_data = train_df[train_df["fold"] == fold]
         
-        if save_each_model == True:
+        if CFG.save_each_model:
             model_dir =  f"{target}/{model_name}/fold_{fold}"
         else: 
             model_dir =  f"{model_name}/fold_{fold}"
@@ -489,9 +511,9 @@ def train_by_fold(
         )
 
 def validate(
+    logger,
     train_df: pd.DataFrame,
     target:str,
-    save_each_model: bool,
     model_name: str,
     hidden_dropout_prob: float,
     attention_probs_dropout_prob: float,
@@ -499,11 +521,11 @@ def validate(
     ) -> pd.DataFrame:
     """predict oof data"""
     for fold in range(CFG.n_splits):
-        print(f"fold {fold}:")
+        logger.info(f"fold {fold}:")
         
         valid_data = train_df[train_df["fold"] == fold]
         
-        if save_each_model == True:
+        if CFG.save_each_model:
             model_dir =  f"{target}/{model_name}/fold_{fold}"
         else: 
             model_dir =  f"{model_name}/fold_{fold}"
@@ -527,23 +549,24 @@ def validate(
     return train_df
     
 def predict(
+    logger,
     test_df: pd.DataFrame,
     target:str,
-    save_each_model: bool,
     model_name: str,
     hidden_dropout_prob: float,
     attention_probs_dropout_prob: float,
-    max_length : int
+    max_length : int,
+    trained_model_dir: str = ""
     ):
     """predict using mean folds"""
 
     for fold in range(CFG.n_splits):
-        print(f"fold {fold}:")
+        logger.info(f"fold {fold}:")
         
-        if save_each_model == True:
-            model_dir =  f"{target}/{model_name}/fold_{fold}"
+        if CFG.save_each_model:
+            model_dir =  f"{trained_model_dir}{target}/{model_name}/fold_{fold}"
         else: 
-            model_dir =  f"{model_name}/fold_{fold}"
+            model_dir =  f"{trained_model_dir}{model_name}/fold_{fold}"
 
         csr = ContentScoreRegressor(
             model_name=model_name,
@@ -573,33 +596,33 @@ class Runner():
     ):
 
         warnings.simplefilter("ignore")
-        logging.disable(logging.ERROR)
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
         disable_progress_bar()
         tqdm.pandas()
 
         seed_everything(seed=42)
+        transformers.logging.set_verbosity_error()
 
         self.targets = ["content", "wording"]
+        self.logger = Logger()
 
         # delete old model files
-        if os.path.exists(RunConfig.gbtmodelpath):
-            shutil.rmtree(RunConfig.gbtmodelpath)
-        os.mkdir(RunConfig.gbtmodelpath)
+        if os.path.exists('gbtmodel'):
+            shutil.rmtree('gbtmodel')
+        os.mkdir('gbtmodel')
 
 
     def load_dataset(self):
 
-        DATA_DIR = "/kaggle/input/commonlit-evaluate-student-summaries/"
-
-        self.prompts_train = pd.read_csv(DATA_DIR + "prompts_train.csv")
-        self.prompts_test = pd.read_csv(DATA_DIR + "prompts_test.csv")
-        self.summaries_train = pd.read_csv(DATA_DIR + "summaries_train.csv")
-        self.summaries_test = pd.read_csv(DATA_DIR + "summaries_test.csv")
-        self.sample_submission = pd.read_csv(DATA_DIR + "sample_submission.csv")
+        self.prompts_train = pd.read_csv(RunConfig.data_dir + "prompts_train.csv")
+        self.prompts_test = pd.read_csv(RunConfig.data_dir + "prompts_test.csv")
+        self.summaries_train = pd.read_csv(RunConfig.data_dir + "summaries_train.csv")
+        self.summaries_test = pd.read_csv(RunConfig.data_dir + "summaries_test.csv")
+        self.sample_submission = pd.read_csv(RunConfig.data_dir + "sample_submission.csv")
 
         if RunConfig.debug:
+            self.logger.info('Debug mode. Reduce train data.')
             self.summaries_train = self.summaries_train.head(RunConfig.debug_size) # for dev mode
 
 
@@ -608,9 +631,11 @@ class Runner():
         preprocessor = Preprocessor(model_name=CFG.model_name)
 
         if RunConfig.train:
+            self.logger.info('Preprocess train data.')
             self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
         
         if RunConfig.predict:
+            self.logger.info('Preprocess test data.')
             self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
 
 
@@ -623,12 +648,15 @@ class Runner():
                 self.train.loc[val_index, "fold"] = i
 
         for target in self.targets:
+            self.logger.info(f'Start training: {target}.')
 
             if RunConfig.train:
+
+                self.logger.info(f'Start training by fold.')
                 train_by_fold(
+                    self.logger,
                     self.train,
                     model_name=CFG.model_name,
-                    save_each_model=False,
                     target=target,
                     learning_rate=CFG.learning_rate,
                     hidden_dropout_prob=CFG.hidden_dropout_prob,
@@ -641,10 +669,11 @@ class Runner():
                     max_length=CFG.max_length
                 )
                 
+                self.logger.info(f'Start creating oof prediction.')
                 self.train = validate(
+                    self.logger,
                     self.train,
                     target=target,
-                    save_each_model=False,
                     model_name=CFG.model_name,
                     hidden_dropout_prob=CFG.hidden_dropout_prob,
                     attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
@@ -652,19 +681,21 @@ class Runner():
                 )
 
                 rmse = mean_squared_error(self.train[target], self.train[f"{target}_pred"], squared=False)
-                print(f"cv {target} rmse: {rmse}")
+                self.logger.info(f"cv {target} rmse: {rmse}")
             
             
             if RunConfig.predict:
-
+                
+                self.logger.info(f'Start Predicting.')
                 self.test = predict(
+                    self.logger,
                     self.test,
                     target=target,
-                    save_each_model=False,
                     model_name=CFG.model_name,
                     hidden_dropout_prob=CFG.hidden_dropout_prob,
                     attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                    max_length=CFG.max_length
+                    max_length=CFG.max_length,
+                    trained_model_dir=RunConfig.trained_model_dir
                 )
 
     def run_lgbm(self):
@@ -680,8 +711,9 @@ class Runner():
         self.model_dict = {}
 
         for target in self.targets:
+            self.logger.info(f'Start training LGBM model: {target}')
+
             models = []
-            
             for fold in range(CFG.n_splits):
 
                 X_train_cv = self.train[self.train["fold"] != fold].drop(columns=drop_columns)
@@ -708,8 +740,9 @@ class Runner():
                                 valid_names=['train', 'valid'],
                                 train_set=dtrain,
                                 valid_sets=dval,
+                                verbose=0,
                                 callbacks=[
-                                    lgb.early_stopping(stopping_rounds=30, verbose=True),
+                                    lgb.early_stopping(stopping_rounds=30, verbose=False),
                                     lgb.log_evaluation(100),
                                     lgb.callback.record_evaluation(evaluation_results)
                                     ],
@@ -738,13 +771,14 @@ class Runner():
                 preds.extend(pred)
                 
             rmse = np.sqrt(mean_squared_error(trues, preds))
-            print(f"{target}_rmse : {rmse}")
+            self.logger.info(f"{target}_rmse : {rmse}")
             rmses = rmses + [rmse]
 
-        print(f"mcrmse : {sum(rmses) / len(rmses)}")
+        self.logger.info(f"mcrmse : {sum(rmses) / len(rmses)}")
 
-
-        with open(f'{RunConfig.gbtmodelpath}/model_dict.pkl', 'wb') as f:
+        save_model_path = 'gbtmodel/model_dict.pkl'
+        self.logger.info(f'save LGBM model: {save_model_path}')
+        with open(save_model_path, 'wb') as f:
             pickle.dump(self.model_dict, f)
 
 
@@ -753,7 +787,8 @@ class Runner():
         if not RunConfig.predict:
             return None
 
-        with open(f'{RunConfig.gbtmodelpath}/model_dict.pkl', 'rb') as f:
+        self.logger.info('Start creating submission data using LGBM.')
+        with open(f'{RunConfig.trained_model_dir}gbtmodel/model_dict.pkl', 'rb') as f:
             self.model_dict = pickle.load(f)
 
         drop_columns = [
