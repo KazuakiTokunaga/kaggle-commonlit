@@ -36,18 +36,18 @@ import lightgbm as lgb
 
 @dataclass
 class CFG():
-    model_name="debertav3base"
-    learning_rate=1.5e-5
-    weight_decay=0.02
-    hidden_dropout_prob=0.005
-    attention_probs_dropout_prob=0.005
-    num_train_epochs=5
-    n_splits=4
-    batch_size=12
-    random_seed=42
-    save_steps=100
-    max_length=512
-    save_each_model=True
+    model_name: str ="debertav3base"
+    learning_rate: float =1.5e-5
+    weight_decay: float =0.02
+    hidden_dropout_prob: float =0.005
+    attention_probs_dropout_prob: float =0.005
+    num_train_epochs: int =5
+    n_splits: int =4
+    batch_size: int =12
+    random_seed: int =42
+    save_steps: int =100
+    max_length: int =512
+    save_each_model: bool =True
 
 @dataclass
 class RunConfig():
@@ -884,6 +884,6 @@ class Runner():
         self.logger.info('Write scores to google sheet.')
 
         nowstr_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
-        base_data = [nowstr_jst, RunConfig.commit_hash]
-        self.data_to_write = [nowstr_jst] + self.data_to_write
+        base_data = [nowstr_jst, RunConfig.commit_hash, asdict(CFG), asdict(RunConfig)]
+        self.data_to_write = base_data + self.data_to_write
         self.sheet.write(self.data_to_write, sheet_name='cvscores')
