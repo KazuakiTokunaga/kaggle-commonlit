@@ -742,7 +742,7 @@ class Runner():
                                 valid_sets=dval,
                                 callbacks=[
                                     lgb.early_stopping(stopping_rounds=30, verbose=False),
-                                    lgb.log_evaluation(0),
+                                    lgb.log_evaluation(-1),
                                     lgb.callback.record_evaluation(evaluation_results)
                                     ],
                                 )
