@@ -884,6 +884,6 @@ class Runner():
         self.logger.info('Write scores to google sheet.')
 
         nowstr_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
-        base_data = [nowstr_jst, RunConfig.commit_hash, asdict(CFG), asdict(RunConfig)]
+        base_data = [nowstr_jst, RunConfig.commit_hash, asdict(CFG()), asdict(RunConfig())]
         self.data_to_write = base_data + self.data_to_write
         self.sheet.write(self.data_to_write, sheet_name='cvscores')
