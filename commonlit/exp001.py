@@ -51,16 +51,16 @@ class CFG():
 
 @dataclass
 class RunConfig():
-    debug=True
-    debug_size=10
-    train=True
-    predict=True
-    commit_hash=""
-    trained_model_dir=""
-    data_dir="/kaggle/input/commonlit-evaluate-student-summaries/"
-    save_to_sheet=True
-    sheet_json_key='/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
-    sheet_key='1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
+    debug: bool =True
+    debug_size: int =10
+    train: bool = True
+    predict: bool = True
+    commit_hash: str =""
+    trained_model_dir: str =""
+    data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
+    save_to_sheet: str = True
+    sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
+    sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
 
 
 class Logger:
