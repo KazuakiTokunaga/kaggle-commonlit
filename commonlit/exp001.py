@@ -11,6 +11,7 @@ import subprocess
 import json
 import datetime
 import transformers
+from dataclasses import dataclass, asdict
 from transformers import AutoModel, AutoTokenizer, AutoConfig, AutoModelForSequenceClassification
 from transformers import DataCollatorWithPadding
 from datasets import Dataset,load_dataset, load_from_disk
@@ -33,7 +34,7 @@ from autocorrect import Speller
 from spellchecker import SpellChecker
 import lightgbm as lgb
 
-
+@dataclass
 class CFG:
     model_name="debertav3base"
     learning_rate=1.5e-5
@@ -48,13 +49,13 @@ class CFG:
     max_length=512
     save_each_model=True
 
-
+@dataclass
 class RunConfig:
     debug=True
     debug_size=10
     train=True
     predict=True
-    git_commit_hash=""
+    commit_hash=""
     trained_model_dir=""
     data_dir="/kaggle/input/commonlit-evaluate-student-summaries/"
     save_to_sheet=True
@@ -883,5 +884,6 @@ class Runner():
         self.logger.info('Write scores to google sheet.')
 
         nowstr_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
+        base_data = [nowstr_jst, RunConfig.commit_hash]
         self.data_to_write = [nowstr_jst] + self.data_to_write
         self.sheet.write(self.data_to_write, sheet_name='cvscores')
