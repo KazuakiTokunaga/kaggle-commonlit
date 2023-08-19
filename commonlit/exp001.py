@@ -104,7 +104,7 @@ class WriteSheet:
         data_json = [json.dumps(d, ensure_ascii=False) if type(d) == dict else d for d in data]
         sheet.append_row(data_json, table_range=table_range)
 
-def get_commit_hash(repo_path='/kaggle/working/kaggle_studentperformance/'):
+def get_commit_hash(repo_path='/kaggle/working/kaggle-commonlit/'):
 
     wd = os.getcwd()
     os.chdir(repo_path)
