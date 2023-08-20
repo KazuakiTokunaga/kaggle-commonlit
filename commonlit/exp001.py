@@ -533,6 +533,7 @@ def train_by_fold(
             model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
         else: 
             model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
+        logger.info(f'training model dir: {model_dir}.')
 
         csr = ContentScoreRegressor(
             model_name=model_name,
@@ -599,8 +600,7 @@ def predict(
     model_name: str,
     hidden_dropout_prob: float,
     attention_probs_dropout_prob: float,
-    max_length : int,
-    trained_model_dir: str = ""
+    max_length : int
     ):
     """predict using mean folds"""
 
@@ -611,6 +611,7 @@ def predict(
             model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
         else: 
             model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
+        logger.info(f'prediction model dir: {model_dir}.')
 
         csr = ContentScoreRegressor(
             model_name=model_name,
@@ -841,7 +842,7 @@ class Runner():
             return None
 
         self.logger.info('Start creating submission data using LGBM.')
-        with open(f'{RunConfig.trained_model_dir}gbtmodel/model_dict.pkl', 'rb') as f:
+        with open(f'{RunConfig.model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
             self.model_dict = pickle.load(f)
 
         drop_columns = [
