@@ -517,11 +517,16 @@ def train_by_fold(
         max_length:int
     ):
 
+    if CFG.save_each_model:
+        model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}"
+    else: 
+        model_dir =  f"{RunConfig.model_dir}/{model_name}"
+    logger.info(f'training model dir: {model_dir}.')
+
     # delete old model files
-    if os.path.exists(model_name):
-        shutil.rmtree(model_name)
-    
-    os.mkdir(model_name)
+    if os.path.exists(model_dir):
+        shutil.rmtree(model_dir)
+    os.mkdir(model_model_name)
         
     for fold in range(CFG.n_splits):
         logger.info(f"fold {fold}:")
@@ -529,16 +534,11 @@ def train_by_fold(
         train_data = train_df[train_df["fold"] != fold]
         valid_data = train_df[train_df["fold"] == fold]
         
-        if CFG.save_each_model:
-            model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
-        else: 
-            model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
-        logger.info(f'training model dir: {model_dir}.')
-
+        fold_model_dir = f'{model_dir}/fold_{fold}'
         csr = ContentScoreRegressor(
             model_name=model_name,
             target=target,
-            model_dir = model_dir, 
+            model_dir = fold_model_dir, 
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
