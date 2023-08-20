@@ -526,7 +526,7 @@ def train_by_fold(
     # delete old model files
     if os.path.exists(model_dir):
         shutil.rmtree(model_dir)
-    os.mkdir(model_dir)
+    os.makedirs(model_dir)
         
     for fold in range(CFG.n_splits):
         logger.info(f"fold {fold}:")
@@ -830,7 +830,7 @@ class Runner():
         model_dir = f'{RunConfig.model_dir}/gbtmodel'
         if os.path.exists(model_dir):
             shutil.rmtree(model_dir)
-        os.mkdir(model_dir)
+        os.makedirs(model_dir)
 
         save_model_path = f'{model_dir}/model_dict.pkl'
         self.logger.info(f'save LGBM model: {save_model_path}')
