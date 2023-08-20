@@ -427,8 +427,8 @@ class ContentScoreRegressor:
             load_best_model_at_end=True, # select best model
             learning_rate=learning_rate,
             # per_gpu_train_batch_size=batch_size
-            gradient_accumulation_steps=4,
-            per_device_train_batch_size= batch_size // 4,
+            # gradient_accumulation_steps=4,
+            per_device_train_batch_size= batch_size,
             per_device_eval_batch_size=8,
             num_train_epochs=num_train_epochs,
             weight_decay=weight_decay,
@@ -440,8 +440,8 @@ class ContentScoreRegressor:
             save_steps=save_steps,
             metric_for_best_model="rmse",
             fp16=True,
-            save_total_limit=1,
-            gradient_checkpointing=True
+            save_total_limit=1
+            # gradient_checkpointing=True
         )
 
         trainer = Trainer(
