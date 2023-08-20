@@ -56,7 +56,7 @@ class RunConfig():
     train: bool = True
     predict: bool = True
     commit_hash: str =""
-    trained_model_dir: str =""
+    model_dir: str ="/kaggle/models"
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
@@ -530,9 +530,9 @@ def train_by_fold(
         valid_data = train_df[train_df["fold"] == fold]
         
         if CFG.save_each_model:
-            model_dir =  f"{target}/{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
         else: 
-            model_dir =  f"{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
 
         csr = ContentScoreRegressor(
             model_name=model_name,
@@ -570,9 +570,9 @@ def validate(
         valid_data = train_df[train_df["fold"] == fold]
         
         if CFG.save_each_model:
-            model_dir =  f"{target}/{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
         else: 
-            model_dir =  f"{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
         
         csr = ContentScoreRegressor(
             model_name=model_name,
@@ -608,9 +608,9 @@ def predict(
         logger.info(f"fold {fold}:")
         
         if CFG.save_each_model:
-            model_dir =  f"{trained_model_dir}{target}/{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
         else: 
-            model_dir =  f"{trained_model_dir}{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
 
         csr = ContentScoreRegressor(
             model_name=model_name,
@@ -706,8 +706,8 @@ class Runner():
 
                 self.logger.info(f'Start training by fold.')
                 train_by_fold(
-                    self.logger,
-                    self.train,
+                    logger=self.logger,
+                    train_df=self.train,
                     model_name=CFG.model_name,
                     target=target,
                     learning_rate=CFG.learning_rate,
@@ -723,8 +723,8 @@ class Runner():
                 
                 self.logger.info(f'Start creating oof prediction.')
                 self.train = validate(
-                    self.logger,
-                    self.train,
+                    logger=self.logger,
+                    train_df=self.train,
                     target=target,
                     model_name=CFG.model_name,
                     hidden_dropout_prob=CFG.hidden_dropout_prob,
@@ -740,14 +740,13 @@ class Runner():
                 
                 self.logger.info(f'Start Predicting.')
                 self.test = predict(
-                    self.logger,
-                    self.test,
+                    logger=self.logger,
+                    test_df=self.test,
                     target=target,
                     model_name=CFG.model_name,
                     hidden_dropout_prob=CFG.hidden_dropout_prob,
                     attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                    max_length=CFG.max_length,
-                    trained_model_dir=RunConfig.trained_model_dir
+                    max_length=CFG.max_length
                 )
 
     def run_lgbm(self):
