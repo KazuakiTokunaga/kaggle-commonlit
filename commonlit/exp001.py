@@ -56,7 +56,7 @@ class RunConfig():
     train: bool = True
     predict: bool = True
     commit_hash: str =""
-    model_dir: str ="/kaggle/models"
+    model_dir: str ="/kaggle/commonlit-models"
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
@@ -890,3 +890,22 @@ class Runner():
         base_data = [nowstr_jst, RunConfig.commit_hash, asdict(CFG()), asdict(RunConfig())]
         self.data_to_write = base_data + self.data_to_write
         self.sheet.write(self.data_to_write, sheet_name='cvscores')
+
+
+    def save_model_as_kaggle_dataset(self,):
+
+        self.logger.info(f'Save {RunConfig.model_dir} as kaggle dataset.')
+        metadata = {
+            "title": "commonlit-models",
+            "id": "kazuakitokunaga/commonlit-models",
+            "licenses": [
+                {
+                "name": "CC0-1.0"
+                }
+            ]
+            }
+
+        with open(f'{RunConfig.model_dir}/dataset-metadata.json', 'w') as f:
+            json.dump(metadata, f)
+
+        subprocess('kaggle datasets version -r zip -p /kaggle/commonlit-models -m "Updated data"')
