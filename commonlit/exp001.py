@@ -526,7 +526,7 @@ def train_by_fold(
     # delete old model files
     if os.path.exists(model_dir):
         shutil.rmtree(model_dir)
-    os.mkdir(model_model_name)
+    os.mkdir(model_dir)
         
     for fold in range(CFG.n_splits):
         logger.info(f"fold {fold}:")
@@ -651,11 +651,6 @@ class Runner():
 
         self.targets = ["content", "wording"]
         self.logger = Logger()
-
-        # delete old model files
-        if os.path.exists('gbtmodel'):
-            shutil.rmtree('gbtmodel')
-        os.mkdir('gbtmodel')
 
         self.data_to_write = []
 
@@ -830,7 +825,14 @@ class Runner():
         self.logger.info(f"mcrmse : {mcrmse}")
         self.data_to_write.append(mcrmse)
 
-        save_model_path = 'gbtmodel/model_dict.pkl'
+
+        # delete old model files
+        model_dir = f'{RunConfig.model_dir}/gbtmodel'
+        if os.path.exists(model_dir):
+            shutil.rmtree(model_dir)
+        os.mkdir(model_dir)
+
+        save_model_path = f'{model_dir}/model_dict.pkl'
         self.logger.info(f'save LGBM model: {save_model_path}')
         with open(save_model_path, 'wb') as f:
             pickle.dump(self.model_dict, f)
