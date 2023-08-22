@@ -567,8 +567,8 @@ def train_by_fold(
             save_steps=save_steps,
         )
 
-        del csr
-        torch.cuda.empty_cache()
+        # del csr
+        # torch.cuda.empty_cache()
 
 def validate(
     logger,
@@ -604,8 +604,8 @@ def validate(
             fold=fold
         )
 
-        del csr
-        torch.cuda.empty_cache()
+        # del csr
+        # torch.cuda.empty_cache()
         
         train_df.loc[valid_data.index, f"{target}_pred"] = pred
 
@@ -645,8 +645,8 @@ def predict(
             fold=fold
         )
         
-        del csr
-        torch.cuda.empty_cache()
+        # del csr
+        # torch.cuda.empty_cache()
 
         test_df[f"{target}_pred_{fold}"] = pred
     
