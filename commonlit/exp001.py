@@ -938,4 +938,4 @@ class Runner():
         with open(f'{RunConfig.model_dir}/dataset-metadata.json', 'w') as f:
             json.dump(metadata, f)
 
-        subprocess.call('kaggle datasets version -r zip -p /kaggle/commonlit-models -m "Updateddata"'.split())
+        subprocess.call(f'kaggle datasets version -r zip -p {RunConfig.model_dir} -m "Updateddata"'.split())
