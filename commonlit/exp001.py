@@ -567,8 +567,8 @@ def train_by_fold(
             save_steps=save_steps,
         )
 
-        # del csr
-        # torch.cuda.empty_cache()
+        del csr
+        torch.cuda.empty_cache()
 
 def validate(
     logger,
@@ -604,8 +604,8 @@ def validate(
             fold=fold
         )
 
-        # del csr
-        # torch.cuda.empty_cache()
+        del csr
+        torch.cuda.empty_cache()
         
         train_df.loc[valid_data.index, f"{target}_pred"] = pred
 
@@ -645,8 +645,8 @@ def predict(
             fold=fold
         )
         
-        # del csr
-        # torch.cuda.empty_cache()
+        del csr
+        torch.cuda.empty_cache()
 
         test_df[f"{target}_pred_{fold}"] = pred
     
@@ -721,7 +721,7 @@ class Runner():
 
             if RunConfig.train:
 
-                print_gpu_utilization()
+                print_gpu_utilization() # 2, 7117
                 self.logger.info(f'Start training by fold.')
                 
                 train_by_fold(
@@ -740,7 +740,7 @@ class Runner():
                     max_length=CFG.max_length
                 )
                 
-                print_gpu_utilization()
+                print_gpu_utilization() # 7117, 6739
                 self.logger.info(f'Start creating oof prediction.')
                 self.train = validate(
                     logger=self.logger,
@@ -758,7 +758,7 @@ class Runner():
             
             if RunConfig.predict:
                 
-                print_gpu_utilization()
+                print_gpu_utilization() # 7117, 6739
                 self.logger.info(f'Start Predicting.')
                 self.test = predict(
                     logger=self.logger,
@@ -771,7 +771,7 @@ class Runner():
                 )
 
 
-                print_gpu_utilization()
+                print_gpu_utilization() # 7117, 7115
 
     def run_lgbm(self):
 
