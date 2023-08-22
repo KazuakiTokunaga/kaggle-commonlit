@@ -720,7 +720,8 @@ class Runner():
             self.logger.info(f'Start training: {target}.')
 
             if RunConfig.train:
-
+                
+                torch.cuda.empty_cache()
                 print_gpu_utilization(self.logger) # 2, 7117　(2, 6137)
                 self.logger.info(f'Start training by fold.')
                 
