@@ -589,15 +589,15 @@ def validate(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
-           )
-
-        del csr
-        torch.cuda.empty_cache()
+        )
 
         pred = csr.predict(
             test_df=valid_data, 
             fold=fold
         )
+
+        del csr
+        torch.cuda.empty_cache()
         
         train_df.loc[valid_data.index, f"{target}_pred"] = pred
 
