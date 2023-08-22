@@ -58,6 +58,7 @@ class RunConfig():
     predict: bool = True
     commit_hash: str =""
     pretrained_model_dir: str = "/kaggle/input"
+    logger_path: str = ""
     model_dir: str ="/kaggle/commonlit-models"
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     save_to_sheet: str = True
@@ -672,7 +673,7 @@ class Runner():
         transformers.logging.set_verbosity_error()
 
         self.targets = ["content", "wording"]
-        self.logger = Logger()
+        self.logger = Logger(RunConfig.logger_path)
 
         self.data_to_write = []
 
