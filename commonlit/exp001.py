@@ -449,7 +449,7 @@ class ContentScoreRegressor:
             eval_steps=save_steps,
             save_steps=save_steps,
             metric_for_best_model="rmse",
-            fp16=True,
+            # fp16=True,
             save_total_limit=1
             # gradient_checkpointing=True
         )
