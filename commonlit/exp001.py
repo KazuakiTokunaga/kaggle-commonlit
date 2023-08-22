@@ -559,6 +559,9 @@ def train_by_fold(
             save_steps=save_steps,
         )
 
+        del csr
+        torch.cuda.empty_cache()
+
 def validate(
     logger,
     train_df: pd.DataFrame,
@@ -587,7 +590,10 @@ def validate(
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
            )
-        
+
+        del csr
+        torch.cuda.empty_cache()
+
         pred = csr.predict(
             test_df=valid_data, 
             fold=fold
@@ -631,6 +637,9 @@ def predict(
             fold=fold
         )
         
+        del csr
+        torch.cuda.empty_cache()
+
         test_df[f"{target}_pred_{fold}"] = pred
     
     test_df[f"{target}"] = test_df[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
