@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import json
 import datetime
+from pynvml import *
 import transformers
 from dataclasses import dataclass, asdict
 from transformers import AutoModel, AutoTokenizer, AutoConfig, AutoModelForSequenceClassification
@@ -117,6 +118,13 @@ def get_commit_hash(repo_path='/kaggle/working/kaggle-commonlit/'):
     os.chdir(wd)
 
     return hash_value
+
+
+def print_gpu_utilization():
+    nvmlInit()
+    handle = nvmlDeviceGetHandleByIndex(0)
+    info = nvmlDeviceGetMemoryInfo(handle)
+    print(f"GPU memory occupied: {info.used//1024**2} MB.")
 
 
 # set random seed
@@ -713,7 +721,9 @@ class Runner():
 
             if RunConfig.train:
 
+                print_gpu_utilization()
                 self.logger.info(f'Start training by fold.')
+                
                 train_by_fold(
                     logger=self.logger,
                     train_df=self.train,
@@ -730,6 +740,7 @@ class Runner():
                     max_length=CFG.max_length
                 )
                 
+                print_gpu_utilization()
                 self.logger.info(f'Start creating oof prediction.')
                 self.train = validate(
                     logger=self.logger,
@@ -747,6 +758,7 @@ class Runner():
             
             if RunConfig.predict:
                 
+                print_gpu_utilization()
                 self.logger.info(f'Start Predicting.')
                 self.test = predict(
                     logger=self.logger,
@@ -757,6 +769,9 @@ class Runner():
                     attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
                     max_length=CFG.max_length
                 )
+
+
+                print_gpu_utilization()
 
     def run_lgbm(self):
 
