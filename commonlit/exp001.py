@@ -467,6 +467,9 @@ class ContentScoreRegressor:
         model_content.save_pretrained(self.model_dir)
         self.tokenizer.save_pretrained(self.model_dir)
 
+        del trainer, model_content
+        torch.cuda.empty_cache()
+
         
     def predict(self, 
                 test_df: pd.DataFrame,
@@ -509,6 +512,9 @@ class ContentScoreRegressor:
                       args = test_args)
 
         preds = infer_content.predict(test_tokenized_dataset)[0]
+
+        del infer_content, model_content
+        torch.cuda.empty_cache()
 
         return preds
 
@@ -721,7 +727,7 @@ class Runner():
 
             if RunConfig.train:
 
-                print_gpu_utilization() # 2, 7117
+                print_gpu_utilization() # 2, 7117　(2, 6137)
                 self.logger.info(f'Start training by fold.')
                 
                 train_by_fold(
@@ -740,7 +746,7 @@ class Runner():
                     max_length=CFG.max_length
                 )
                 
-                print_gpu_utilization() # 7117, 6739
+                print_gpu_utilization() # 7117, 6739 (1719, 1719)
                 self.logger.info(f'Start creating oof prediction.')
                 self.train = validate(
                     logger=self.logger,
@@ -758,7 +764,7 @@ class Runner():
             
             if RunConfig.predict:
                 
-                print_gpu_utilization() # 7117, 6739
+                print_gpu_utilization() # 7117, 6739 (3907, 3907)
                 self.logger.info(f'Start Predicting.')
                 self.test = predict(
                     logger=self.logger,
@@ -771,7 +777,7 @@ class Runner():
                 )
 
 
-                print_gpu_utilization() # 7117, 7115
+                print_gpu_utilization() # 7117, 7115 (6137, 6137)
 
     def run_lgbm(self):
 
