@@ -57,6 +57,7 @@ class RunConfig():
     train: bool = True
     predict: bool = True
     commit_hash: str =""
+    pretrained_model_dir: str = "/kaggle/input"
     model_dir: str ="/kaggle/commonlit-models"
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     save_to_sheet: str = True
@@ -143,7 +144,7 @@ class Preprocessor:
     def __init__(self, 
                 model_name: str,
                 ) -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(f"/kaggle/input/{model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
         self.twd = TreebankWordDetokenizer()
         self.STOP_WORDS = set(stopwords.words('english'))
         
@@ -353,8 +354,8 @@ class ContentScoreRegressor:
         self.model_dir = model_dir
         self.max_length = max_length
         
-        self.tokenizer = AutoTokenizer.from_pretrained(f"/kaggle/input/{model_name}")
-        self.model_config = AutoConfig.from_pretrained(f"/kaggle/input/{model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
+        self.model_config = AutoConfig.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
         
         self.model_config.update({
             "hidden_dropout_prob": hidden_dropout_prob,
@@ -417,7 +418,7 @@ class ContentScoreRegressor:
         valid_df = valid_df[[self.input_col] + self.target_cols]
         
         model_content = AutoModelForSequenceClassification.from_pretrained(
-            f"/kaggle/input/{self.model_name}", 
+            f"{RunConfig.pretrained_model_dir}/{self.model_name}", 
             config=self.model_config
         )
 
