@@ -40,8 +40,8 @@ class CFG():
     model_name: str ="debertav3base"
     learning_rate: float =1.5e-5
     weight_decay: float =0.02
-    hidden_dropout_prob: float =0.005
-    attention_probs_dropout_prob: float =0.005
+    hidden_dropout_prob: float =0.007
+    attention_probs_dropout_prob: float =0.007
     num_train_epochs: int =5
     n_splits: int =4
     batch_size: int =12
@@ -808,7 +808,10 @@ class Runner():
                         'random_state': 42,
                         'objective': 'regression',
                         'metric': 'rmse',
-                        'learning_rate': 0.05,
+                        'learning_rate': 0.048,
+                        'max_depth': 3,
+                        'lambda_l1': 0.0,
+                        'lambda_l2': 0.011
                         }
 
                 evaluation_results = {}
