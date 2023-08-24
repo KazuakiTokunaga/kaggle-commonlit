@@ -33,6 +33,14 @@ class RunConfig():
     logger_path: str = ""
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     device: str = "cpu" # cuda
+    translation_models = [
+        ["Helsinki-NLP/opus-mt-en-fr", "Helsinki-NLP/opus-mt-fr-en"],
+        ["Helsinki-NLP/opus-mt-en-zh", "Helsinki-NLP/opus-mt-zh-en"],
+        ["Helsinki-NLP/opus-mt-en-ru", "Helsinki-NLP/opus-mt-ru-en"],
+        ["Helsinki-NLP/opus-mt-en-es", "Helsinki-NLP/opus-mt-es-en"],
+        ["Helsinki-NLP/opus-mt-en-de", "Helsinki-NLP/opus-mt-de-en"],
+        ["Helsinki-NLP/opus-mt-en-ja", "Helsinki-NLP/opus-mt-ja-en"]
+    ]
 
 
 class Logger:
@@ -147,16 +155,8 @@ class Runner():
 
     def translate(self):
 
-        model_Helsinki = [
-            ["Helsinki-NLP/opus-mt-en-fr", "Helsinki-NLP/opus-mt-fr-en"],
-            ["Helsinki-NLP/opus-mt-en-zh", "Helsinki-NLP/opus-mt-zh-en"],
-            ["Helsinki-NLP/opus-mt-en-ru", "Helsinki-NLP/opus-mt-ru-en"],
-            ["Helsinki-NLP/opus-mt-en-es", "Helsinki-NLP/opus-mt-es-en"],
-            ["Helsinki-NLP/opus-mt-en-de", "Helsinki-NLP/opus-mt-de-en"],
-            ["Helsinki-NLP/opus-mt-en-ja", "Helsinki-NLP/opus-mt-ja-en"]
-        ]
 
-        for k, models in enumerate(model_Helsinki):
+        for k, models in enumerate(RunConfig.translation_models):
             print('backtranslation: ', models)
 
             back_trans_aug = naw.BackTranslationAug(
