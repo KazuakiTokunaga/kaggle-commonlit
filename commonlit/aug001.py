@@ -31,6 +31,25 @@ class RunConfig():
     debug_size: int =10
 
 
+class Logger:
+
+    def __init__(self, log_path=''):
+        self.general_logger = logging.getLogger('general')
+        stream_handler = logging.StreamHandler()
+        file_general_handler = logging.FileHandler(f'{log_path}general.log')
+        if len(self.general_logger.handlers) == 0:
+            self.general_logger.addHandler(stream_handler)
+            self.general_logger.addHandler(file_general_handler)
+            self.general_logger.setLevel(logging.INFO)
+
+    def info(self, message):
+        # 時刻をつけてコンソールとログに出力
+        self.general_logger.info('[{}] - {}'.format(self.now_string(), message))
+
+    def now_string(self):
+        return str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
+
+
 def print_gpu_utilization(logger):
     nvmlInit()
     handle = nvmlDeviceGetHandleByIndex(0)
@@ -54,11 +73,7 @@ class Preprocessor:
     def __init__(self, 
                 model_name: str,
                 ) -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
-        self.twd = TreebankWordDetokenizer()
-        self.STOP_WORDS = set(stopwords.words('english'))
-        
-        self.spacy_ner_model = spacy.load('en_core_web_sm',)
+
         self.speller = Speller(lang='en')
         self.spellchecker = SpellChecker() 
 
@@ -81,7 +96,6 @@ class Preprocessor:
             mode:str
         ) -> pd.DataFrame:
         
-
         prompts["prompt_tokens"] = prompts["prompt_text"].apply(
             lambda x: word_tokenize(x)
         )
