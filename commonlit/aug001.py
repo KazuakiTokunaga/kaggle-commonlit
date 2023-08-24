@@ -151,7 +151,7 @@ class Runner():
         ]
 
         for k, models in enumerate(model_Helsinki):
-            print('backtranslation: 'models)
+            print('backtranslation: ', models)
 
             back_trans_aug = naw.BackTranslationAug(from_model_name=models[0], to_model_name=models[1])
             self.train[f'back_translation_{k}'] = self.train["fixed_summary_text"].apply(
