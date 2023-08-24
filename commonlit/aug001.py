@@ -109,6 +109,9 @@ class Preprocessor:
             lambda x: self.speller(x)
         )
         
+        # merge prompts and summaries
+        input_df = summaries.merge(prompts, how="left", on="prompt_id")
+        
         return input_df.drop(columns=["summary_tokens", "prompt_tokens"])
 
 
@@ -117,7 +120,7 @@ class Runner():
     def __init__(
         self,
     ):
-    
+
         tqdm.pandas()
         self.logger = Logger(RunConfig.logger_path)
 
