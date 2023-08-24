@@ -120,7 +120,7 @@ class Runner():
     def __init__(
         self,
     ):
-        pass
+        self.logger = Logger(RunConfig.logger_path)
 
     def load_dataset(self):
 
