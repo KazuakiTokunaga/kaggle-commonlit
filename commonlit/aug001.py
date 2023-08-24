@@ -117,6 +117,8 @@ class Runner():
     def __init__(
         self,
     ):
+    
+        tqdm.pandas()
         self.logger = Logger(RunConfig.logger_path)
 
     def load_dataset(self):
