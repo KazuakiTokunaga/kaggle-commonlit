@@ -165,15 +165,17 @@ class Runner():
                 from_model_name=from_model, 
                 to_model_name=to_model,
                 device=RunConfig.device)
-            self.train[f'back_translation_{col_suffix}'] = self.train["fixed_summary_text"].apply(
-                lambda x: back_trans_aug.augment(x)[0]
-            )
+            # self.train[f'back_translation_{col_suffix}'] = self.train["fixed_summary_text"].progress_apply(
+            #     lambda x: back_trans_aug.augment(x)[0]
+            # )
+
+            self.train[f'back_translation_{col_suffix}'] = back_trans_aug.augment(self.train["fixed_summary_text"])
     
 
     def save_translation_csv(self):
 
         translation_columns = [c for c in self.train.columns if c.startswith("back_translation")]
-        columns_output = "student_id" + translation_columns
+        columns_output = ["student_id"] + translation_columns
         self.df_output = self.train[columns_output]
 
         self.df_output = pd.melt(self.df_output, id_vars=['student_id'], value_vars=translation_columns, var_name='lang', value_name='summary_text')
