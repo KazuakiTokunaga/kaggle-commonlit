@@ -30,6 +30,8 @@ import nlpaug.augmenter.word as naw
 class RunConfig():
     debug: bool =True
     debug_size: int =10
+    logger_path: str = ""
+    data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
 
 
 class Logger:
