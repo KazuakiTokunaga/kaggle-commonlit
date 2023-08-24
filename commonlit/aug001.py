@@ -165,11 +165,11 @@ class Runner():
                 from_model_name=from_model, 
                 to_model_name=to_model,
                 device=RunConfig.device)
-            # self.train[f'back_translation_{col_suffix}'] = self.train["fixed_summary_text"].progress_apply(
-            #     lambda x: back_trans_aug.augment(x)[0]
-            # )
+            self.train[f'back_translation_{col_suffix}'] = self.train["fixed_summary_text"].progress_apply(
+                lambda x: back_trans_aug.augment(x)[0]
+            )
 
-            self.train[f'back_translation_{col_suffix}'] = back_trans_aug.augment(self.train["fixed_summary_text"])
+            # self.train[f'back_translation_{col_suffix}'] = back_trans_aug.augment(self.train["fixed_summary_text"])
     
 
     def save_translation_csv(self):
