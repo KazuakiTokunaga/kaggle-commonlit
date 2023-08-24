@@ -10,6 +10,7 @@ import subprocess
 import json
 import datetime
 from tqdm import tqdm
+from dataclasses import dataclass, asdict
 
 import nltk
 from nltk.corpus import stopwords
@@ -23,6 +24,11 @@ from spellchecker import SpellChecker
 
 import nlpaug.augmenter.word as naw
 
+
+@dataclass
+class RunConfig():
+    debug: bool =True
+    debug_size: int =10
 
 
 def print_gpu_utilization(logger):
