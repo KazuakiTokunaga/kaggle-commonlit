@@ -33,7 +33,7 @@ class RunConfig():
     logger_path: str = ""
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     device: str = "cpu" # cuda
-    translation_models = [
+    translation_models: List[List[str]] = [
         ["Helsinki-NLP/opus-mt-en-fr", "Helsinki-NLP/opus-mt-fr-en"],
         ["Helsinki-NLP/opus-mt-en-zh", "Helsinki-NLP/opus-mt-zh-en"],
         ["Helsinki-NLP/opus-mt-en-ru", "Helsinki-NLP/opus-mt-ru-en"],
@@ -158,11 +158,23 @@ class Runner():
 
         for k, models in enumerate(RunConfig.translation_models):
             print('backtranslation: ', models)
+            from_model = models[0]
+            to_model = models[1]
+            col_suffix = f"{from_model[:3]}_{from_model[-2:]}"
 
             back_trans_aug = naw.BackTranslationAug(
-                from_model_name=models[0], 
-                to_model_name=models[1],
+                from_model_name=from_model, 
+                to_model_name=to_model,
                 device=RunConfig.device)
-            self.train[f'back_translation_{k}'] = self.train["fixed_summary_text"].apply(
-                lambda x: back_trans_aug.augment(x)
+            self.train[f'back_translation_{col_suffix}'] = self.train["fixed_summary_text"].apply(
+                lambda x: back_trans_aug.augment(x)[0]
             )
+    
+    def save_translation_csv(self):
+
+        translation_columns = [c for c in self.train.columns if c.startswith("back_translation")]
+        columns_output = "student_id" + translation_columns
+        self.df_output = self.train[columns_output]
+
+        self.df_output = pd.melt(self.df_output, id_vars=['student_id'], value_vars=translation_columns, var_name='lang', value_name='summary_text')
+        self.df_output.to_csv('back_translation.csv', index=False)
