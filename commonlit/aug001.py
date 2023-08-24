@@ -32,6 +32,7 @@ class RunConfig():
     debug_size: int =10
     logger_path: str = ""
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
+    device str = "cpu" # cuda
 
 
 class Logger:
@@ -158,7 +159,10 @@ class Runner():
         for k, models in enumerate(model_Helsinki):
             print('backtranslation: ', models)
 
-            back_trans_aug = naw.BackTranslationAug(from_model_name=models[0], to_model_name=models[1])
+            back_trans_aug = naw.BackTranslationAug(
+                from_model_name=models[0], 
+                to_model_name=models[1],
+                device=RunConfig.device)
             self.train[f'back_translation_{k}'] = self.train["fixed_summary_text"].apply(
-                lambda x: back_trans_aug.augmente(x)
+                lambda x: back_trans_aug.augment(x)
             )
