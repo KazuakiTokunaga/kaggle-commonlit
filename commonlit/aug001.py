@@ -32,7 +32,7 @@ class RunConfig():
     debug_size: int =10
     logger_path: str = ""
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
-    device str = "cpu" # cuda
+    device: str = "cpu" # cuda
 
 
 class Logger:
