@@ -33,7 +33,7 @@ class RunConfig():
     logger_path: str = ""
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     device: str = "cpu" # cuda
-    translation_models: List[List[str]] = [
+    translation_models = [
         ["Helsinki-NLP/opus-mt-en-fr", "Helsinki-NLP/opus-mt-fr-en"],
         ["Helsinki-NLP/opus-mt-en-zh", "Helsinki-NLP/opus-mt-zh-en"],
         ["Helsinki-NLP/opus-mt-en-ru", "Helsinki-NLP/opus-mt-ru-en"],
@@ -155,7 +155,6 @@ class Runner():
 
     def translate(self):
 
-
         for k, models in enumerate(RunConfig.translation_models):
             print('backtranslation: ', models)
             from_model = models[0]
@@ -170,6 +169,7 @@ class Runner():
                 lambda x: back_trans_aug.augment(x)[0]
             )
     
+
     def save_translation_csv(self):
 
         translation_columns = [c for c in self.train.columns if c.startswith("back_translation")]
