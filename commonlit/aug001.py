@@ -73,9 +73,7 @@ def seed_everything(seed: int):
 
 
 class Preprocessor:
-    def __init__(self, 
-                model_name: str,
-                ) -> None:
+    def __init__(self, ) -> None:
 
         self.speller = Speller(lang='en')
         self.spellchecker = SpellChecker() 
@@ -95,8 +93,7 @@ class Preprocessor:
 
     def run(self, 
             prompts: pd.DataFrame,
-            summaries:pd.DataFrame,
-            mode:str
+            summaries:pd.DataFrame
         ) -> pd.DataFrame:
         
         prompts["prompt_tokens"] = prompts["prompt_text"].apply(
@@ -137,9 +134,9 @@ class Runner():
 
     def preprocess(self):
 
-        preprocessor = Preprocessor(model_name=CFG.model_name)
-        self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
-        self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
+        preprocessor = Preprocessor()
+        self.train = preprocessor.run(self.prompts_train, self.summaries_train)
+        self.test = preprocessor.run(self.prompts_test, self.summaries_test)
 
 
     def translate(self):
