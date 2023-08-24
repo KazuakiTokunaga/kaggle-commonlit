@@ -31,8 +31,9 @@ class RunConfig():
     debug: bool =True
     debug_size: int =10
     logger_path: str = ""
-    data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     device: str = "cpu" # cuda
+    save_path: str = "."
+    data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     translation_models = [
         ["Helsinki-NLP/opus-mt-en-fr", "Helsinki-NLP/opus-mt-fr-en"],
         ["Helsinki-NLP/opus-mt-en-zh", "Helsinki-NLP/opus-mt-zh-en"],
@@ -179,4 +180,4 @@ class Runner():
         self.df_output = self.train[columns_output]
 
         self.df_output = pd.melt(self.df_output, id_vars=['student_id'], value_vars=translation_columns, var_name='lang', value_name='summary_text')
-        self.df_output.to_csv('back_translation.csv', index=False)
+        self.df_output.to_csv(f'{RunConfig.save_path}/back_translation.csv', index=False)
