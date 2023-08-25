@@ -61,7 +61,7 @@ class RunConfig():
     logger_path: str = ""
     model_dir: str ="/kaggle/commonlit-models"
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
-    aug_data: bool = True
+    use_aug_data: bool = True
     aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
@@ -698,7 +698,7 @@ class Runner():
             self.logger.info('Debug mode. Reduce train data.')
             self.summaries_train = self.summaries_train.head(RunConfig.debug_size) # for dev mode
         
-        if RunConfig.augdata:
+        if RunConfig.use_aug_data:
             self.augtrain = pd.read_csv(RunConfig.aug_data_dir + "back_translation.csv")
 
     def preprocess(self):
