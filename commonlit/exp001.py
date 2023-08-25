@@ -530,7 +530,8 @@ def train_by_fold(
         weight_decay: float,
         num_train_epochs: int,
         save_steps: int,
-        max_length:int
+        max_length:int,
+        df_augtrain = None
     ):
 
     if CFG.save_each_model:
@@ -549,6 +550,11 @@ def train_by_fold(
         
         train_data = train_df[train_df["fold"] != fold]
         valid_data = train_df[train_df["fold"] == fold]
+
+        if RunConfig.use_aug_data:
+            train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
+            train_data = pd.concat([train_data, train_aug_data])
+        display(train_data)
         
         fold_model_dir = f'{model_dir}/fold_{fold}'
         csr = ContentScoreRegressor(
@@ -698,8 +704,11 @@ class Runner():
             self.logger.info('Debug mode. Reduce train data.')
             self.summaries_train = self.summaries_train.head(RunConfig.debug_size) # for dev mode
         
+        self.augtrain = None
         if RunConfig.use_aug_data:
-            self.augtrain = pd.read_csv(RunConfig.aug_data_dir + "back_translation.csv")
+            
+            self.augtrain = pd.read_csv(RunConfig.aug_data_dir + "back_translation.csv").drop(['lang'], axis=1)
+            self.augtrain.columns = [['student_id', 'fixed_summary_text']]
 
     def preprocess(self):
 
@@ -708,7 +717,6 @@ class Runner():
         if RunConfig.train:
             self.logger.info('Preprocess train data.')
             self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
-
         
         if RunConfig.predict:
             self.logger.info('Preprocess test data.')
@@ -721,6 +729,11 @@ class Runner():
         if RunConfig.train:
             for i, (_, val_index) in enumerate(gkf.split(self.train, groups=self.train["prompt_id"])):
                 self.train.loc[val_index, "fold"] = i
+        
+        if RunConfig.use_aug_data:
+            df_master = self.train[['student_id', 'prompt_id', 'prompt_title', 'prompt_question', 'context', 'wording', 'fold']]
+            self.augtrain = self.augtrain.merge(df_master, on="student_id", how="left")
+            self.augtrain = self.augtrain[self.augtrain['fixed_summary_text'].notnull()]
 
         for target in self.targets:
             self.logger.info(f'Start training: {target}.')
@@ -744,7 +757,8 @@ class Runner():
                     n_splits=CFG.n_splits,
                     batch_size=CFG.batch_size,
                     save_steps=CFG.save_steps,
-                    max_length=CFG.max_length
+                    max_length=CFG.max_length,
+                    df_augtrain = self.augtrain
                 )
                 
                 print_gpu_utilization(self.logger) # 7117, 6739 (1719, 1719)
