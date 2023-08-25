@@ -571,6 +571,7 @@ def train_by_fold(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
+            runconfig = runconfig,
            )
         
         csr.train(
@@ -615,6 +616,7 @@ def validate(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
+            runconfig = runconfig,
         )
 
         pred = csr.predict(
@@ -657,6 +659,7 @@ def predict(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
+            runconfig = runconfig,
            )
         
         pred = csr.predict(
