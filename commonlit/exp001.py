@@ -12,7 +12,7 @@ import json
 import datetime
 from pynvml import *
 import transformers
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from transformers import AutoModel, AutoTokenizer, AutoConfig, AutoModelForSequenceClassification
 from transformers import DataCollatorWithPadding
 from datasets import Dataset,load_dataset, load_from_disk
@@ -66,9 +66,9 @@ class RunConfig():
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
-    use_aug_data = [
+    use_aug_data: List[str] = field(default_factory=lambda: [
         "back_translation_Hel_fr"
-    ]
+    ])
 
 
 class Logger:
