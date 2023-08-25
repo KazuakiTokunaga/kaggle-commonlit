@@ -70,6 +70,7 @@ class RunConfig():
         "back_translation_Hel_fr"
     ])
 
+runconfig = RunConfig()
 
 class Logger:
 
