@@ -733,7 +733,7 @@ class Runner():
         if RunConfig.use_aug_data:
             df_master = self.train[['student_id', 'prompt_id', 'prompt_title', 'prompt_question', 'content', 'wording', 'fold']]
             self.augtrain = self.augtrain.merge(df_master, on="student_id", how="left")
-            self.augtrain = self.augtrain[self.augtrain['fixed_summary_text'].notnull()]
+            self.augtrain = self.augtrain[self.augtrain['prompt_id'].notnull()]
 
         for target in self.targets:
             self.logger.info(f'Start training: {target}.')
