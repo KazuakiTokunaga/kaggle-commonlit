@@ -561,7 +561,6 @@ def train_by_fold(
         if runconfig.use_aug_data:
             train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
             train_data = pd.concat([train_data, train_aug_data])
-        display(train_data)
         
         fold_model_dir = f'{model_dir}/fold_{fold}'
         csr = ContentScoreRegressor(
