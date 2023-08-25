@@ -63,12 +63,12 @@ class RunConfig():
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     use_aug_data: bool = True
     aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
+    aug_data_list: List[str] = field(default_factory=lambda: [
+        "back_translation_Hel_fr"
+    ])
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
-    use_aug_data: List[str] = field(default_factory=lambda: [
-        "back_translation_Hel_fr"
-    ])
 
 class Logger:
 
@@ -721,7 +721,8 @@ class Runner():
         self.augtrain = None
         if self.runconfig.use_aug_data:
             
-            self.augtrain = pd.read_csv(self.runconfig.aug_data_dir + "back_translation.csv").drop(['lang'], axis=1)
+            self.augtrain = pd.read_csv(self.runconfig.aug_data_dir + "back_translation.csv")
+            self.augtrain = self.augtrain[self.augtrain['lang'].isin(runconfig.aug_data_list)].drop(['lang'], axis=1)
             self.augtrain.columns = ['student_id', 'fixed_summary_text']
 
     def preprocess(self):
@@ -956,7 +957,7 @@ class Runner():
         self.logger.info('Write scores to google sheet.')
 
         nowstr_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
-        base_data = [nowstr_jst, self.runconfig.commit_hash, asdict(CFG()), asdict(self.runconfig())]
+        base_data = [nowstr_jst, self.runconfig.commit_hash, asdict(CFG()), asdict(self.runconfig)]
         self.data_to_write = base_data + self.data_to_write
         self.sheet.write(self.data_to_write, sheet_name='cvscores')
 
