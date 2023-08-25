@@ -722,7 +722,7 @@ class Runner():
         if self.runconfig.use_aug_data:
             
             self.augtrain = pd.read_csv(self.runconfig.aug_data_dir + "back_translation.csv")
-            self.augtrain = self.augtrain[self.augtrain['lang'].isin(runconfig.aug_data_list)].drop(['lang'], axis=1)
+            self.augtrain = self.augtrain[self.augtrain['lang'].isin(self.runconfig.aug_data_list)].drop(['lang'], axis=1)
             self.augtrain.columns = ['student_id', 'fixed_summary_text']
 
     def preprocess(self):
