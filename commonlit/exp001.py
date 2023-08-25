@@ -63,6 +63,9 @@ class RunConfig():
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     use_aug_data: bool = True
     aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
+    use_aug_data = [
+        "back_translation_Hel_fr"
+    ]
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
