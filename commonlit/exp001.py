@@ -61,6 +61,8 @@ class RunConfig():
     logger_path: str = ""
     model_dir: str ="/kaggle/commonlit-models"
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
+    aug_data: bool = True
+    aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
@@ -695,7 +697,9 @@ class Runner():
         if RunConfig.debug:
             self.logger.info('Debug mode. Reduce train data.')
             self.summaries_train = self.summaries_train.head(RunConfig.debug_size) # for dev mode
-
+        
+        if RunConfig.augdata:
+            self.augtrain = pd.read_csv(RunConfig.aug_data_dir + "back_translation.csv")
 
     def preprocess(self):
 
@@ -704,6 +708,7 @@ class Runner():
         if RunConfig.train:
             self.logger.info('Preprocess train data.')
             self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
+
         
         if RunConfig.predict:
             self.logger.info('Preprocess test data.')
@@ -713,7 +718,6 @@ class Runner():
     def run_transformers_regressor(self):
 
         gkf = GroupKFold(n_splits=CFG.n_splits)
-
         if RunConfig.train:
             for i, (_, val_index) in enumerate(gkf.split(self.train, groups=self.train["prompt_id"])):
                 self.train.loc[val_index, "fold"] = i
