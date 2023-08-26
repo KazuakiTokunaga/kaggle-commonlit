@@ -48,7 +48,7 @@ class CFG:
     max_length: int =512
     save_each_model: bool =True
 
-class RunConfig:
+class RCFG:
     debug: bool =True
     debug_size: int =10
     train: bool = True
@@ -146,7 +146,7 @@ class Preprocessor:
     def __init__(self, 
                 model_name: str,
                 ) -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(f"{RCFG.pretrained_model_dir}/{model_name}")
         self.twd = TreebankWordDetokenizer()
         self.STOP_WORDS = set(stopwords.words('english'))
         
@@ -356,8 +356,8 @@ class ContentScoreRegressor:
         self.model_dir = model_dir
         self.max_length = max_length
         
-        self.tokenizer = AutoTokenizer.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
-        self.model_config = AutoConfig.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(f"{RCFG.pretrained_model_dir}/{model_name}")
+        self.model_config = AutoConfig.from_pretrained(f"{RCFG.pretrained_model_dir}/{model_name}")
         
         self.model_config.update({
             "hidden_dropout_prob": hidden_dropout_prob,
@@ -420,7 +420,7 @@ class ContentScoreRegressor:
         valid_df = valid_df[[self.input_col] + self.target_cols]
         
         model_content = AutoModelForSequenceClassification.from_pretrained(
-            f"{RunConfig.pretrained_model_dir}/{self.model_name}", 
+            f"{RCFG.pretrained_model_dir}/{self.model_name}", 
             config=self.model_config
         )
 
@@ -534,9 +534,9 @@ def train_by_fold(
     ):
 
     if CFG.save_each_model:
-        model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}"
+        model_dir =  f"{RCFG.model_dir}/{target}/{model_name}"
     else: 
-        model_dir =  f"{RunConfig.model_dir}/{model_name}"
+        model_dir =  f"{RCFG.model_dir}/{model_name}"
     logger.info(f'training model dir: {model_dir}.')
 
     # delete old model files
@@ -550,7 +550,7 @@ def train_by_fold(
         train_data = train_df[train_df["fold"] != fold]
         valid_data = train_df[train_df["fold"] == fold]
 
-        if RunConfig.use_aug_data:
+        if RCFG.use_aug_data:
             train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
             train_data = pd.concat([train_data, train_aug_data])
         
@@ -594,9 +594,9 @@ def validate(
         valid_data = train_df[train_df["fold"] == fold]
         
         if CFG.save_each_model:
-            model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
+            model_dir =  f"{RCFG.model_dir}/{target}/{model_name}/fold_{fold}"
         else: 
-            model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
+            model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
         
         csr = ContentScoreRegressor(
             model_name=model_name,
@@ -634,9 +634,9 @@ def predict(
         logger.info(f"fold {fold}:")
         
         if CFG.save_each_model:
-            model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
+            model_dir =  f"{RCFG.model_dir}/{target}/{model_name}/fold_{fold}"
         else: 
-            model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
+            model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
         logger.info(f'prediction model dir: {model_dir}.')
 
         csr = ContentScoreRegressor(
@@ -679,44 +679,44 @@ class Runner():
         transformers.logging.set_verbosity_error()
 
         self.targets = ["content", "wording"]
-        self.logger = Logger(RunConfig.logger_path)
+        self.logger = Logger(RCFG.logger_path)
 
         self.data_to_write = []
 
-        if RunConfig.save_to_sheet:
+        if RCFG.save_to_sheet:
             self.logger.info('Initializing Google Sheet.')
             self.sheet = WriteSheet(
-                sheet_json_key = RunConfig.sheet_json_key,
-                sheet_key = RunConfig.sheet_key
+                sheet_json_key = RCFG.sheet_json_key,
+                sheet_key = RCFG.sheet_key
             )
 
     def load_dataset(self):
 
-        self.prompts_train = pd.read_csv(RunConfig.data_dir + "prompts_train.csv")
-        self.prompts_test = pd.read_csv(RunConfig.data_dir + "prompts_test.csv")
-        self.summaries_train = pd.read_csv(RunConfig.data_dir + "summaries_train.csv")
-        self.summaries_test = pd.read_csv(RunConfig.data_dir + "summaries_test.csv")
-        self.sample_submission = pd.read_csv(RunConfig.data_dir + "sample_submission.csv")
+        self.prompts_train = pd.read_csv(RCFG.data_dir + "prompts_train.csv")
+        self.prompts_test = pd.read_csv(RCFG.data_dir + "prompts_test.csv")
+        self.summaries_train = pd.read_csv(RCFG.data_dir + "summaries_train.csv")
+        self.summaries_test = pd.read_csv(RCFG.data_dir + "summaries_test.csv")
+        self.sample_submission = pd.read_csv(RCFG.data_dir + "sample_submission.csv")
 
-        if RunConfig.debug:
+        if RCFG.debug:
             self.logger.info('Debug mode. Reduce train data.')
-            self.summaries_train = self.summaries_train.head(RunConfig.debug_size) # for dev mode
+            self.summaries_train = self.summaries_train.head(RCFG.debug_size) # for dev mode
         
         self.augtrain = None
-        if RunConfig.use_aug_data:
+        if RCFG.use_aug_data:
             
-            self.augtrain = pd.read_csv(RunConfig.aug_data_dir + "back_translation.csv").drop(['lang'], axis=1)
+            self.augtrain = pd.read_csv(RCFG.aug_data_dir + "back_translation.csv").drop(['lang'], axis=1)
             self.augtrain.columns = ['student_id', 'fixed_summary_text']
 
     def preprocess(self):
 
         preprocessor = Preprocessor(model_name=CFG.model_name)
 
-        if RunConfig.train:
+        if RCFG.train:
             self.logger.info('Preprocess train data.')
             self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
         
-        if RunConfig.predict:
+        if RCFG.predict:
             self.logger.info('Preprocess test data.')
             self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
 
@@ -724,11 +724,11 @@ class Runner():
     def run_transformers_regressor(self):
 
         gkf = GroupKFold(n_splits=CFG.n_splits)
-        if RunConfig.train:
+        if RCFG.train:
             for i, (_, val_index) in enumerate(gkf.split(self.train, groups=self.train["prompt_id"])):
                 self.train.loc[val_index, "fold"] = i
         
-        if RunConfig.use_aug_data:
+        if RCFG.use_aug_data:
             df_master = self.train[['student_id', 'prompt_id', 'prompt_title', 'prompt_question', 'content', 'wording', 'fold']]
             self.augtrain = self.augtrain.merge(df_master, on="student_id", how="left")
             self.augtrain = self.augtrain[self.augtrain['prompt_id'].notnull()]
@@ -736,7 +736,7 @@ class Runner():
         for target in self.targets:
             self.logger.info(f'Start training: {target}.')
 
-            if RunConfig.train:
+            if RCFG.train:
                 
                 torch.cuda.empty_cache()
                 print_gpu_utilization(self.logger) # 2, 7117　(2, 6137)
@@ -775,7 +775,7 @@ class Runner():
                 self.logger.info(f"cv {target} rmse: {rmse}")
                 self.data_to_write.append(rmse)
             
-            if RunConfig.predict:
+            if RCFG.predict:
                 
                 print_gpu_utilization(self.logger) # 7117, 6739 (3907, 3907)
                 self.logger.info(f'Start Predicting.')
@@ -794,7 +794,7 @@ class Runner():
 
     def run_lgbm(self):
 
-        if not RunConfig.train:
+        if not RCFG.train:
             return None
         
         drop_columns = ["fold", "student_id", "prompt_id", "text", "fixed_summary_text",
@@ -877,7 +877,7 @@ class Runner():
 
 
         # delete old model files
-        model_dir = f'{RunConfig.model_dir}/gbtmodel'
+        model_dir = f'{RCFG.model_dir}/gbtmodel'
         if os.path.exists(model_dir):
             shutil.rmtree(model_dir)
         os.makedirs(model_dir)
@@ -890,11 +890,11 @@ class Runner():
 
     def create_prediction(self):
 
-        if not RunConfig.predict:
+        if not RCFG.predict:
             return None
 
         self.logger.info('Start creating submission data using LGBM.')
-        with open(f'{RunConfig.model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
+        with open(f'{RCFG.model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
             self.model_dict = pickle.load(f)
 
         drop_columns = [
@@ -937,7 +937,7 @@ class Runner():
         self.logger.info('Write scores to google sheet.')
 
         nowstr_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
-        base_data = [nowstr_jst, self.runconfig.commit_hash, class_vars_to_dict(CFG),  class_vars_to_dict(RunConfig)]
+        base_data = [nowstr_jst, self.runconfig.commit_hash, class_vars_to_dict(CFG),  class_vars_to_dict(RCFG)]
         self.data_to_write = base_data + self.data_to_write
         self.sheet.write(self.data_to_write, sheet_name='cvscores')
 
