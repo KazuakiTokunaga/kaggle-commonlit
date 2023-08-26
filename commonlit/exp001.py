@@ -938,14 +938,14 @@ class Runner():
         self.logger.info('Write scores to google sheet.')
 
         nowstr_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
-        base_data = [nowstr_jst, self.runconfig.commit_hash, class_vars_to_dict(CFG),  class_vars_to_dict(RCFG)]
+        base_data = [nowstr_jst, RCFG.commit_hash, class_vars_to_dict(CFG),  class_vars_to_dict(RCFG)]
         self.data_to_write = base_data + self.data_to_write
         self.sheet.write(self.data_to_write, sheet_name='cvscores')
 
 
     def save_model_as_kaggle_dataset(self,):
 
-        self.logger.info(f'Save {self.runconfig.model_dir} as kaggle dataset.')
+        self.logger.info(f'Save {RCFG.model_dir} as kaggle dataset.')
         metadata = {
             "title": "commonlit-models",
             "id": "kazuakitokunaga/commonlit-models",
@@ -956,7 +956,7 @@ class Runner():
             ]
             }
 
-        with open(f'{self.runconfig.model_dir}/dataset-metadata.json', 'w') as f:
+        with open(f'{RCFG.model_dir}/dataset-metadata.json', 'w') as f:
             json.dump(metadata, f)
 
-        subprocess.call(f'kaggle datasets version -r zip -p {self.runconfig.model_dir} -m "Updateddata"'.split())
+        subprocess.call(f'kaggle datasets version -r zip -p {RCFG.model_dir} -m "Updateddata"'.split())
