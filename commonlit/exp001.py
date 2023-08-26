@@ -36,8 +36,8 @@ import lightgbm as lgb
 
 class CFG:
     model_name: str ="debertav3base"
-    learning_rate: float =1.5e-5
-    weight_decay: float =0.02
+    learning_rate: float =0.000016
+    weight_decay: float =0.03
     hidden_dropout_prob: float =0.007
     attention_probs_dropout_prob: float =0.007
     num_train_epochs: int =5
@@ -830,7 +830,7 @@ class Runner():
                         'objective': 'regression',
                         'metric': 'rmse',
                         'learning_rate': 0.048,
-                        'max_depth': 3,
+                        'max_depth': 4,
                         'lambda_l1': 0.0,
                         'lambda_l2': 0.011
                         }
