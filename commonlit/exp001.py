@@ -12,7 +12,6 @@ import json
 import datetime
 from pynvml import *
 import transformers
-from dataclasses import dataclass, asdict, field
 from transformers import AutoModel, AutoTokenizer, AutoConfig, AutoModelForSequenceClassification
 from transformers import DataCollatorWithPadding
 from datasets import Dataset,load_dataset, load_from_disk
@@ -35,8 +34,7 @@ from autocorrect import Speller
 from spellchecker import SpellChecker
 import lightgbm as lgb
 
-@dataclass
-class CFG():
+class CFG:
     model_name: str ="debertav3base"
     learning_rate: float =1.5e-5
     weight_decay: float =0.02
@@ -50,8 +48,7 @@ class CFG():
     max_length: int =512
     save_each_model: bool =True
 
-@dataclass
-class RunConfig():
+class RunConfig:
     debug: bool =True
     debug_size: int =10
     train: bool = True
@@ -59,13 +56,13 @@ class RunConfig():
     commit_hash: str =""
     pretrained_model_dir: str = "/kaggle/input"
     logger_path: str = ""
-    model_dir: str ="/kaggle/commonlit-models"
+    model_dir: str = "." # "/kaggle/commonlit-models"
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
-    use_aug_data: bool = True
+    use_aug_data: bool = False
     aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
-    aug_data_list: List[str] = field(default_factory=lambda: [
+    aug_data_list: [
         "back_translation_Hel_fr"
-    ])
+    ]
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
@@ -148,10 +145,8 @@ def seed_everything(seed: int):
 class Preprocessor:
     def __init__(self, 
                 model_name: str,
-                runconfig: RunConfig,
                 ) -> None:
-        self.runconfig = runconfig
-        self.tokenizer = AutoTokenizer.from_pretrained(f"{self.runconfig.pretrained_model_dir}/{model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
         self.twd = TreebankWordDetokenizer()
         self.STOP_WORDS = set(stopwords.words('english'))
         
@@ -349,9 +344,7 @@ class ContentScoreRegressor:
                 hidden_dropout_prob: float,
                 attention_probs_dropout_prob: float,
                 max_length: int,
-                runconfig: RunConfig,
                 ):
-        self.runconfig = runconfig
         self.inputs = ["prompt_text", "prompt_title", "prompt_question", "fixed_summary_text"]
         self.input_col = "input"
         
@@ -363,8 +356,8 @@ class ContentScoreRegressor:
         self.model_dir = model_dir
         self.max_length = max_length
         
-        self.tokenizer = AutoTokenizer.from_pretrained(f"{self.runconfig.pretrained_model_dir}/{model_name}")
-        self.model_config = AutoConfig.from_pretrained(f"{self.runconfig.pretrained_model_dir}/{model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
+        self.model_config = AutoConfig.from_pretrained(f"{RunConfig.pretrained_model_dir}/{model_name}")
         
         self.model_config.update({
             "hidden_dropout_prob": hidden_dropout_prob,
@@ -427,7 +420,7 @@ class ContentScoreRegressor:
         valid_df = valid_df[[self.input_col] + self.target_cols]
         
         model_content = AutoModelForSequenceClassification.from_pretrained(
-            f"{self.runconfig.pretrained_model_dir}/{self.model_name}", 
+            f"{RunConfig.pretrained_model_dir}/{self.model_name}", 
             config=self.model_config
         )
 
@@ -537,14 +530,13 @@ def train_by_fold(
         num_train_epochs: int,
         save_steps: int,
         max_length:int,
-        runconfig: RunConfig,
-        df_augtrain = None,
+        df_augtrain = None
     ):
 
     if CFG.save_each_model:
-        model_dir =  f"{runconfig.model_dir}/{target}/{model_name}"
+        model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}"
     else: 
-        model_dir =  f"{runconfig.model_dir}/{model_name}"
+        model_dir =  f"{RunConfig.model_dir}/{model_name}"
     logger.info(f'training model dir: {model_dir}.')
 
     # delete old model files
@@ -558,7 +550,7 @@ def train_by_fold(
         train_data = train_df[train_df["fold"] != fold]
         valid_data = train_df[train_df["fold"] == fold]
 
-        if runconfig.use_aug_data:
+        if RunConfig.use_aug_data:
             train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
             train_data = pd.concat([train_data, train_aug_data])
         
@@ -570,7 +562,6 @@ def train_by_fold(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
-            runconfig = runconfig,
            )
         
         csr.train(
@@ -594,8 +585,7 @@ def validate(
     model_name: str,
     hidden_dropout_prob: float,
     attention_probs_dropout_prob: float,
-    max_length : int,
-    runconfig: RunConfig,
+    max_length : int
     ) -> pd.DataFrame:
     """predict oof data"""
     for fold in range(CFG.n_splits):
@@ -604,9 +594,9 @@ def validate(
         valid_data = train_df[train_df["fold"] == fold]
         
         if CFG.save_each_model:
-            model_dir =  f"{runconfig.model_dir}/{target}/{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
         else: 
-            model_dir =  f"{runconfig.model_dir}/{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
         
         csr = ContentScoreRegressor(
             model_name=model_name,
@@ -615,7 +605,6 @@ def validate(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
-            runconfig = runconfig,
         )
 
         pred = csr.predict(
@@ -637,8 +626,7 @@ def predict(
     model_name: str,
     hidden_dropout_prob: float,
     attention_probs_dropout_prob: float,
-    max_length : int,
-    runconfig: RunConfig,
+    max_length : int
     ):
     """predict using mean folds"""
 
@@ -646,9 +634,9 @@ def predict(
         logger.info(f"fold {fold}:")
         
         if CFG.save_each_model:
-            model_dir =  f"{runconfig.model_dir}/{target}/{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{target}/{model_name}/fold_{fold}"
         else: 
-            model_dir =  f"{runconfig.model_dir}/{model_name}/fold_{fold}"
+            model_dir =  f"{RunConfig.model_dir}/{model_name}/fold_{fold}"
         logger.info(f'prediction model dir: {model_dir}.')
 
         csr = ContentScoreRegressor(
@@ -658,7 +646,6 @@ def predict(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
-            runconfig = runconfig,
            )
         
         pred = csr.predict(
@@ -692,47 +679,44 @@ class Runner():
         transformers.logging.set_verbosity_error()
 
         self.targets = ["content", "wording"]
-        self.runconfig = RunConfig()
-        self.logger = Logger(self.runconfig.logger_path)
+        self.logger = Logger(RunConfig.logger_path)
 
         self.data_to_write = []
-        
 
-        if self.runconfig.save_to_sheet:
+        if RunConfig.save_to_sheet:
             self.logger.info('Initializing Google Sheet.')
             self.sheet = WriteSheet(
-                sheet_json_key = self.runconfig.sheet_json_key,
-                sheet_key = self.runconfig.sheet_key
+                sheet_json_key = RunConfig.sheet_json_key,
+                sheet_key = RunConfig.sheet_key
             )
 
     def load_dataset(self):
 
-        self.prompts_train = pd.read_csv(self.runconfig.data_dir + "prompts_train.csv")
-        self.prompts_test = pd.read_csv(self.runconfig.data_dir + "prompts_test.csv")
-        self.summaries_train = pd.read_csv(self.runconfig.data_dir + "summaries_train.csv")
-        self.summaries_test = pd.read_csv(self.runconfig.data_dir + "summaries_test.csv")
-        self.sample_submission = pd.read_csv(self.runconfig.data_dir + "sample_submission.csv")
+        self.prompts_train = pd.read_csv(RunConfig.data_dir + "prompts_train.csv")
+        self.prompts_test = pd.read_csv(RunConfig.data_dir + "prompts_test.csv")
+        self.summaries_train = pd.read_csv(RunConfig.data_dir + "summaries_train.csv")
+        self.summaries_test = pd.read_csv(RunConfig.data_dir + "summaries_test.csv")
+        self.sample_submission = pd.read_csv(RunConfig.data_dir + "sample_submission.csv")
 
-        if self.runconfig.debug:
+        if RunConfig.debug:
             self.logger.info('Debug mode. Reduce train data.')
-            self.summaries_train = self.summaries_train.head(self.runconfig.debug_size) # for dev mode
+            self.summaries_train = self.summaries_train.head(RunConfig.debug_size) # for dev mode
         
         self.augtrain = None
-        if self.runconfig.use_aug_data:
+        if RunConfig.use_aug_data:
             
-            self.augtrain = pd.read_csv(self.runconfig.aug_data_dir + "back_translation.csv")
-            self.augtrain = self.augtrain[self.augtrain['lang'].isin(self.runconfig.aug_data_list)].drop(['lang'], axis=1)
+            self.augtrain = pd.read_csv(RunConfig.aug_data_dir + "back_translation.csv").drop(['lang'], axis=1)
             self.augtrain.columns = ['student_id', 'fixed_summary_text']
 
     def preprocess(self):
 
-        preprocessor = Preprocessor(model_name=CFG.model_name, runconfig = self.runconfig)
+        preprocessor = Preprocessor(model_name=CFG.model_name)
 
-        if self.runconfig.train:
+        if RunConfig.train:
             self.logger.info('Preprocess train data.')
             self.train = preprocessor.run(self.prompts_train, self.summaries_train, mode="train")
         
-        if self.runconfig.predict:
+        if RunConfig.predict:
             self.logger.info('Preprocess test data.')
             self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
 
@@ -740,11 +724,11 @@ class Runner():
     def run_transformers_regressor(self):
 
         gkf = GroupKFold(n_splits=CFG.n_splits)
-        if self.runconfig.train:
+        if RunConfig.train:
             for i, (_, val_index) in enumerate(gkf.split(self.train, groups=self.train["prompt_id"])):
                 self.train.loc[val_index, "fold"] = i
         
-        if self.runconfig.use_aug_data:
+        if RunConfig.use_aug_data:
             df_master = self.train[['student_id', 'prompt_id', 'prompt_title', 'prompt_question', 'content', 'wording', 'fold']]
             self.augtrain = self.augtrain.merge(df_master, on="student_id", how="left")
             self.augtrain = self.augtrain[self.augtrain['prompt_id'].notnull()]
@@ -752,7 +736,7 @@ class Runner():
         for target in self.targets:
             self.logger.info(f'Start training: {target}.')
 
-            if self.runconfig.train:
+            if RunConfig.train:
                 
                 torch.cuda.empty_cache()
                 print_gpu_utilization(self.logger) # 2, 7117　(2, 6137)
@@ -772,8 +756,7 @@ class Runner():
                     batch_size=CFG.batch_size,
                     save_steps=CFG.save_steps,
                     max_length=CFG.max_length,
-                    df_augtrain = self.augtrain,
-                    runconfig = self.runconfig
+                    df_augtrain = self.augtrain
                 )
                 
                 print_gpu_utilization(self.logger) # 7117, 6739 (1719, 1719)
@@ -785,15 +768,14 @@ class Runner():
                     model_name=CFG.model_name,
                     hidden_dropout_prob=CFG.hidden_dropout_prob,
                     attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                    max_length=CFG.max_length,
-                    runconfig = self.runconfig
+                    max_length=CFG.max_length
                 )
 
                 rmse = mean_squared_error(self.train[target], self.train[f"{target}_pred"], squared=False)
                 self.logger.info(f"cv {target} rmse: {rmse}")
                 self.data_to_write.append(rmse)
             
-            if self.runconfig.predict:
+            if RunConfig.predict:
                 
                 print_gpu_utilization(self.logger) # 7117, 6739 (3907, 3907)
                 self.logger.info(f'Start Predicting.')
@@ -804,8 +786,7 @@ class Runner():
                     model_name=CFG.model_name,
                     hidden_dropout_prob=CFG.hidden_dropout_prob,
                     attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                    max_length=CFG.max_length,
-                    runconfig = self.runconfig
+                    max_length=CFG.max_length
                 )
 
 
@@ -813,7 +794,7 @@ class Runner():
 
     def run_lgbm(self):
 
-        if not self.runconfig.train:
+        if not RunConfig.train:
             return None
         
         drop_columns = ["fold", "student_id", "prompt_id", "text", "fixed_summary_text",
@@ -896,7 +877,7 @@ class Runner():
 
 
         # delete old model files
-        model_dir = f'{self.runconfig.model_dir}/gbtmodel'
+        model_dir = f'{RunConfig.model_dir}/gbtmodel'
         if os.path.exists(model_dir):
             shutil.rmtree(model_dir)
         os.makedirs(model_dir)
@@ -909,11 +890,11 @@ class Runner():
 
     def create_prediction(self):
 
-        if not self.runconfig.predict:
+        if not RunConfig.predict:
             return None
 
         self.logger.info('Start creating submission data using LGBM.')
-        with open(f'{self.runconfig.model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
+        with open(f'{RunConfig.model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
             self.model_dict = pickle.load(f)
 
         drop_columns = [
@@ -956,7 +937,7 @@ class Runner():
         self.logger.info('Write scores to google sheet.')
 
         nowstr_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
-        base_data = [nowstr_jst, self.runconfig.commit_hash, asdict(CFG()), asdict(self.runconfig)]
+        base_data = [nowstr_jst, self.runconfig.commit_hash, class_vars_to_dict(CFG),  class_vars_to_dict(RunConfig)]
         self.data_to_write = base_data + self.data_to_write
         self.sheet.write(self.data_to_write, sheet_name='cvscores')
 
