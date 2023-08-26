@@ -123,6 +123,10 @@ def get_commit_hash(repo_path='/kaggle/working/kaggle-commonlit/'):
     return hash_value
 
 
+def class_vars_to_dict(cls):
+    return {key: value for key, value in cls.__dict__.items() if not key.startswith("__") and not callable(value)}
+
+
 def print_gpu_utilization(logger):
     nvmlInit()
     handle = nvmlDeviceGetHandleByIndex(0)
