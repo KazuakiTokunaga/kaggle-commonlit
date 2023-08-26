@@ -729,6 +729,7 @@ class Runner():
                 self.train.loc[val_index, "fold"] = i
         
         if RCFG.use_aug_data:
+            self.logger.info('Use augmented data.')
             df_master = self.train[['student_id', 'prompt_id', 'prompt_title', 'prompt_question', 'content', 'wording', 'fold']]
             self.augtrain = self.augtrain.merge(df_master, on="student_id", how="left")
             self.augtrain = self.augtrain[self.augtrain['prompt_id'].notnull()]
