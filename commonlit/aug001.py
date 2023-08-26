@@ -11,7 +11,6 @@ import subprocess
 import json
 import datetime
 from tqdm import tqdm
-from dataclasses import dataclass, asdict
 
 import nltk
 from nltk.corpus import stopwords
@@ -25,9 +24,7 @@ from spellchecker import SpellChecker
 
 import nlpaug.augmenter.word as naw
 
-
-@dataclass
-class RunConfig():
+class RCFG:
     debug: bool =True
     debug_size: int =10
     logger_path: str = ""
@@ -40,7 +37,9 @@ class RunConfig():
         ["Helsinki-NLP/opus-mt-en-ru", "Helsinki-NLP/opus-mt-ru-en"],
         ["Helsinki-NLP/opus-mt-en-es", "Helsinki-NLP/opus-mt-es-en"],
         ["Helsinki-NLP/opus-mt-en-de", "Helsinki-NLP/opus-mt-de-en"],
-        ["Helsinki-NLP/opus-mt-en-ja", "Helsinki-NLP/opus-mt-ja-en"]
+        ["Helsinki-NLP/opus-mt-en-ja", "Helsinki-NLP/opus-mt-ja-en"],
+        ["facebook/wmt19-en-de", "facebook/wmt19-de-en"],
+        ["facebook/wmt19-en-ru", "facebook/wmt19-ru-en"]
     ]
 
 
@@ -132,19 +131,19 @@ class Runner():
     ):
 
         tqdm.pandas()
-        self.logger = Logger(RunConfig.logger_path)
+        self.logger = Logger(RCFG.logger_path)
 
     def load_dataset(self):
 
-        self.prompts_train = pd.read_csv(RunConfig.data_dir + "prompts_train.csv")
-        self.prompts_test = pd.read_csv(RunConfig.data_dir + "prompts_test.csv")
-        self.summaries_train = pd.read_csv(RunConfig.data_dir + "summaries_train.csv")
-        self.summaries_test = pd.read_csv(RunConfig.data_dir + "summaries_test.csv")
-        self.sample_submission = pd.read_csv(RunConfig.data_dir + "sample_submission.csv")
+        self.prompts_train = pd.read_csv(RCFG.data_dir + "prompts_train.csv")
+        self.prompts_test = pd.read_csv(RCFG.data_dir + "prompts_test.csv")
+        self.summaries_train = pd.read_csv(RCFG.data_dir + "summaries_train.csv")
+        self.summaries_test = pd.read_csv(RCFG.data_dir + "summaries_test.csv")
+        self.sample_submission = pd.read_csv(RCFG.data_dir + "sample_submission.csv")
 
-        if RunConfig.debug:
+        if RCFG.debug:
             self.logger.info('Debug mode. Reduce train data.')
-            self.summaries_train = self.summaries_train.head(RunConfig.debug_size) # for dev mode
+            self.summaries_train = self.summaries_train.head(RCFG.debug_size) # for dev mode
 
 
     def preprocess(self):
@@ -156,7 +155,7 @@ class Runner():
 
     def translate(self):
 
-        for k, models in enumerate(RunConfig.translation_models):
+        for k, models in enumerate(RCFG.translation_models):
             print('backtranslation: ', models)
             from_model = models[0]
             to_model = models[1]
@@ -165,7 +164,7 @@ class Runner():
             back_trans_aug = naw.BackTranslationAug(
                 from_model_name=from_model, 
                 to_model_name=to_model,
-                device=RunConfig.device)
+                device=RCFG.device)
             self.train[f'back_translation_{col_suffix}'] = self.train["fixed_summary_text"].progress_apply(
                 lambda x: back_trans_aug.augment(x)[0]
             )
@@ -180,4 +179,4 @@ class Runner():
         self.df_output = self.train[columns_output]
 
         self.df_output = pd.melt(self.df_output, id_vars=['student_id'], value_vars=translation_columns, var_name='lang', value_name='summary_text')
-        self.df_output.to_csv(f'{RunConfig.save_path}/back_translation.csv', index=False)
+        self.df_output.to_csv(f'{RCFG.save_path}/back_translation.csv', index=False)
