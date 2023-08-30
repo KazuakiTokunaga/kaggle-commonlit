@@ -180,3 +180,19 @@ class Runner():
 
         self.df_output = pd.melt(self.df_output, id_vars=['student_id'], value_vars=translation_columns, var_name='lang', value_name='summary_text')
         self.df_output.to_csv(f'{RCFG.save_path}/back_translation.csv', index=False)
+
+
+    def translate_wmt21(self):
+
+        def translate_lang(x, lang="de"):
+            inputs = tokenizer(x, return_tensors="pt")
+            generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.get_lang_id("de"))
+            return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+
+        model = AutoModelForSeq2SeqLM.from_pretrained("facebook/wmt21-dense-24-wide-en-x")
+        tokenizer = AutoTokenizer.from_pretrained("facebook/wmt21-dense-24-wide-en-x")
+
+        self.train['translate_de'] = self.train["fixed_summary_text"].progress_apply(
+            translate_lang
+        )
+
