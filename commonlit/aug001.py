@@ -195,14 +195,15 @@ class Runner():
     def translate_wmt21_to_x(self):
 
         def translate_lang(x, lang="de"):
-            inputs = tokenizer(x, return_tensors="pt")
+            inputs = tokenizer(x, return_tensors="pt").to(device)
             generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.get_lang_id("de"))
             return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
         print_gpu_utilization(self.logger)
-        model = AutoModelForSeq2SeqLM.from_pretrained("facebook/wmt21-dense-24-wide-en-x")
+        model = AutoModelForSeq2SeqLM.from_pretrained("facebook/wmt21-dense-24-wide-en-x").to(device)
         tokenizer = AutoTokenizer.from_pretrained("facebook/wmt21-dense-24-wide-en-x")
-
+        
         lang = "de"
         self.train[f'translate_wmt21_{lang}'] = self.train["fixed_summary_text"].progress_apply(
             translate_lang, lang=lang
