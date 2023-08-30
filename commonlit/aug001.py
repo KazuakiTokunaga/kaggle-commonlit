@@ -21,6 +21,7 @@ import spacy
 import re
 from autocorrect import Speller
 from spellchecker import SpellChecker
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 import nlpaug.augmenter.word as naw
 
