@@ -187,7 +187,7 @@ class Runner():
 
         translation_columns = [c for c in self.train.columns if c.startswith(cname)]
         columns_output = ["student_id"] + translation_columns
-        self.df_output = self.train[columns_output]
+        self.df_output = self.train[columns_output].copy()
 
         self.df_output = pd.melt(self.df_output, id_vars=['student_id'], value_vars=translation_columns, var_name='lang', value_name='summary_text')
         self.df_output.to_csv(f'{RCFG.save_path}/{filename}.csv', index=False)
@@ -214,6 +214,17 @@ class Runner():
             print_gpu_utilization(self.logger)
             torch.cuda.empty_cache()
             print_gpu_utilization(self.logger)
+
+            self.save_translation_csv(cname="translate_wmt21", filename='translate_wmt21')
+    
+    def translate_wmt21_to_en(self):
+
+        df = pd.load_csv('translate_wmt21.csv')
+        df_output = df.copy()
+
+        for lang in RCFG.langs:
+            df_target = df[df['lang']==f'translate_wmt21_{lang}']
+
         
 
 
