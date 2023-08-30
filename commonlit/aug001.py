@@ -197,7 +197,7 @@ class Runner():
 
         def translate_lang(x, lang="de"):
             inputs = tokenizer(x, return_tensors="pt").to(device)
-            generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.get_lang_id("de"))
+            generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.get_lang_id(lang))
             return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
 
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
