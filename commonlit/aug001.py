@@ -182,14 +182,14 @@ class Runner():
             # self.train[f'back_translation_{col_suffix}'] = back_trans_aug.augment(self.train["fixed_summary_text"])
     
 
-    def save_translation_csv(self, cname="back_translation"):
+    def save_translation_csv(self, cname="back_translation", filename='back_translation'):
 
         translation_columns = [c for c in self.train.columns if c.startswith(cname)]
         columns_output = ["student_id"] + translation_columns
         self.df_output = self.train[columns_output]
 
         self.df_output = pd.melt(self.df_output, id_vars=['student_id'], value_vars=translation_columns, var_name='lang', value_name='summary_text')
-        self.df_output.to_csv(f'{RCFG.save_path}/back_translation.csv', index=False)
+        self.df_output.to_csv(f'{RCFG.save_path}/{filename}.csv', index=False)
 
 
     def translate_wmt21_to_x(self):
@@ -197,7 +197,7 @@ class Runner():
         def translate_lang(x, lang="de"):
             inputs = tokenizer(x, return_tensors="pt").to(device)
             generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.get_lang_id("de"))
-            return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+            return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
 
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         print_gpu_utilization(self.logger)
