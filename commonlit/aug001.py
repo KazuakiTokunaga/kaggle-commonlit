@@ -10,8 +10,10 @@ import shutil
 import subprocess
 import json
 import datetime
+from pynvml import *
 from tqdm import tqdm
 
+import torch
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
@@ -80,6 +82,13 @@ def seed_everything(seed: int):
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
+
+
+def print_gpu_utilization(logger):
+    nvmlInit()
+    handle = nvmlDeviceGetHandleByIndex(0)
+    info = nvmlDeviceGetMemoryInfo(handle)
+    logger.info(f"GPU memory occupied: {info.used//1024**2} MB.")
 
 
 class Preprocessor:
@@ -173,9 +182,9 @@ class Runner():
             # self.train[f'back_translation_{col_suffix}'] = back_trans_aug.augment(self.train["fixed_summary_text"])
     
 
-    def save_translation_csv(self):
+    def save_translation_csv(self, cname="back_translation"):
 
-        translation_columns = [c for c in self.train.columns if c.startswith("back_translation")]
+        translation_columns = [c for c in self.train.columns if c.startswith(cname)]
         columns_output = ["student_id"] + translation_columns
         self.df_output = self.train[columns_output]
 
@@ -183,17 +192,25 @@ class Runner():
         self.df_output.to_csv(f'{RCFG.save_path}/back_translation.csv', index=False)
 
 
-    def translate_wmt21(self):
+    def translate_wmt21_to_x(self):
 
         def translate_lang(x, lang="de"):
             inputs = tokenizer(x, return_tensors="pt")
             generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.get_lang_id("de"))
             return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
+        print_gpu_utilization(self.logger)
         model = AutoModelForSeq2SeqLM.from_pretrained("facebook/wmt21-dense-24-wide-en-x")
         tokenizer = AutoTokenizer.from_pretrained("facebook/wmt21-dense-24-wide-en-x")
 
-        self.train['translate_de'] = self.train["fixed_summary_text"].progress_apply(
-            translate_lang
+        lang = "de"
+        self.train[f'translate_wmt21_{lang}'] = self.train["fixed_summary_text"].progress_apply(
+            translate_lang, lang=lang
         )
+        
+        print_gpu_utilization(self.logger)
+        torch.cuda.empty_cache()
+        print_gpu_utilization(self.logger)
+    
+
 
