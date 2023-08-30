@@ -43,7 +43,8 @@ class RCFG:
         ["Helsinki-NLP/opus-mt-en-ja", "Helsinki-NLP/opus-mt-ja-en"],
         ["facebook/wmt19-en-de", "facebook/wmt19-de-en"],
         ["facebook/wmt19-en-ru", "facebook/wmt19-ru-en"]
-    ]
+    ],
+    langs = ['ha', 'is', 'ja', 'cs', 'ru', 'zh', 'de']
 
 
 class Logger:
@@ -204,14 +205,15 @@ class Runner():
         model = AutoModelForSeq2SeqLM.from_pretrained("facebook/wmt21-dense-24-wide-en-x").to(device)
         tokenizer = AutoTokenizer.from_pretrained("facebook/wmt21-dense-24-wide-en-x")
         
-        lang = "de"
-        self.train[f'translate_wmt21_{lang}'] = self.train["fixed_summary_text"].progress_apply(
-            translate_lang, lang=lang
-        )
+        for lang in RCFG.langs:
+            self.logger.info(f'translation {lang}.')
+            self.train[f'translate_wmt21_{lang}'] = self.train["fixed_summary_text"].progress_apply(
+                translate_lang, lang=lang
+            )
+            
+            print_gpu_utilization(self.logger)
+            torch.cuda.empty_cache()
+            print_gpu_utilization(self.logger)
         
-        print_gpu_utilization(self.logger)
-        torch.cuda.empty_cache()
-        print_gpu_utilization(self.logger)
-    
 
 
