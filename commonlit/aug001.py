@@ -219,11 +219,32 @@ class Runner():
     
     def translate_wmt21_to_en(self):
 
-        df = pd.load_csv('translate_wmt21.csv')
-        df_output = df.copy()
+        df = pd.load_csv('/kaggle/commonlit/aug-data/translate_wmt21.csv')
 
+        def translate_lang(x, lang="de"):
+            tokenizer.src_lang = lang
+            inputs = tokenizer(x, return_tensors="pt").to(device)
+            generated_tokens = model.generate(**inputs)
+            return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
+
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        model = AutoModelForSeq2SeqLM.from_pretrained("facebook/wmt21-dense-24-wide-x-en").to(device)
+        tokenizer = AutoTokenizer.from_pretrained("facebook/wmt21-dense-24-wide-x-en")
+
+        print_gpu_utilization(self.logger)
         for lang in RCFG.langs:
+            tokenizer.src_lang = lang
             df_target = df[df['lang']==f'translate_wmt21_{lang}']
+    
+            self.train[f'back_translate_wmt21_{lang}'] = df_target['fixed_summary_text'].progress_apply(
+                translate_lang, lang=lang
+            )
+
+            print_gpu_utilization(self.logger)
+            torch.cuda.empty_cache()
+            print_gpu_utilization(self.logger)
+
+            self.save_translation_csv(cname="back_translate_wmt21", filename='back_translate_wmt21')
 
         
 
