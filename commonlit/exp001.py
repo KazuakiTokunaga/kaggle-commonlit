@@ -55,7 +55,7 @@ class RCFG:
     predict: bool = True
     commit_hash: str =""
     pretrained_model_dir: str = "/kaggle/input"
-    logger_path: str = ""
+    output_path: str = ""
     model_dir: str = "." # "/kaggle/commonlit-models"
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     use_aug_data: bool = False
@@ -66,6 +66,16 @@ class RCFG:
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
+    lgbm_params = {
+        'boosting_type': 'gbdt',
+        'random_state': 42,
+        'objective': 'regression',
+        'metric': 'rmse',
+        'learning_rate': 0.048,
+        'max_depth': 4,
+        'lambda_l1': 0.0,
+        'lambda_l2': 0.011
+     }
 
 class Logger:
 
@@ -684,7 +694,7 @@ class Runner():
         transformers.logging.set_verbosity_error()
 
         self.targets = ["content", "wording"]
-        self.logger = Logger(RCFG.logger_path)
+        self.logger = Logger(RCFG.output_path)
 
         self.data_to_write = []
 
@@ -798,6 +808,8 @@ class Runner():
 
 
                 print_gpu_utilization(self.logger) # 7117, 7115 (6137, 6137)
+        
+        self.train.to_csv(f'{RCFG.output_path}train_processed.csv', index=False)
 
     def run_lgbm(self):
 
@@ -826,30 +838,20 @@ class Runner():
                 dtrain = lgb.Dataset(X_train_cv, label=y_train_cv)
                 dval = lgb.Dataset(X_eval_cv, label=y_eval_cv)
 
-                params = {
-                        'boosting_type': 'gbdt',
-                        'random_state': 42,
-                        'objective': 'regression',
-                        'metric': 'rmse',
-                        'learning_rate': 0.048,
-                        'max_depth': 4,
-                        'lambda_l1': 0.0,
-                        'lambda_l2': 0.011
-                        }
-
                 evaluation_results = {}
-                model = lgb.train(params,
-                                num_boost_round=10000,
-                                    #categorical_feature = categorical_features,
-                                valid_names=['train', 'valid'],
-                                train_set=dtrain,
-                                valid_sets=dval,
-                                callbacks=[
-                                    lgb.early_stopping(stopping_rounds=30, verbose=False),
-                                    lgb.log_evaluation(-1),
-                                    lgb.callback.record_evaluation(evaluation_results)
-                                    ],
-                                )
+                model = lgb.train(
+                    RCFG.lgbm_params,
+                    num_boost_round=10000,
+                        #categorical_feature = categorical_features,
+                    valid_names=['train', 'valid'],
+                    train_set=dtrain,
+                    valid_sets=dval,
+                    callbacks=[
+                        lgb.early_stopping(stopping_rounds=30, verbose=False),
+                        lgb.log_evaluation(-1),
+                        lgb.callback.record_evaluation(evaluation_results)
+                    ],
+                )
                 models.append(model)
             
             self.model_dict[target] = models
