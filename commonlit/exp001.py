@@ -809,7 +809,8 @@ class Runner():
 
                 print_gpu_utilization(self.logger) # 7117, 7115 (6137, 6137)
         
-        self.train.to_csv(f'{RCFG.output_path}train_processed.csv', index=False)
+        if RCFG.train:
+            self.train.to_csv(f'{RCFG.output_path}train_processed.csv', index=False)
 
     def run_lgbm(self):
 
