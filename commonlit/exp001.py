@@ -76,7 +76,7 @@ class RCFG:
         'lambda_l1': 0.0,
         'lambda_l2': 0.011
      }
-     kaggle_dataset_title = "commonlit-models"
+     kaggle_dataset_title: str = "commonlit-models"
 
 class Logger:
 
