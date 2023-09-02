@@ -66,6 +66,7 @@ class RCFG:
     save_to_sheet: str = True
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
+    kaggle_dataset_title: str = "commonlit-models"
     lgbm_params = {
         'boosting_type': 'gbdt',
         'random_state': 42,
@@ -76,7 +77,6 @@ class RCFG:
         'lambda_l1': 0.0,
         'lambda_l2': 0.011
      }
-     kaggle_dataset_title: str = "commonlit-models"
 
 class Logger:
 
