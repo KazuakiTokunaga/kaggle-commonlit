@@ -55,6 +55,7 @@ class RCFG:
     predict: bool = True
     commit_hash: str =""
     pretrained_model_dir: str = "/kaggle/input"
+    base_model_dir: str = "/kaggle/input/debertav3base"
     output_path: str = ""
     model_dir: str = "." # "/kaggle/commonlit-models"
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
@@ -160,7 +161,7 @@ class Preprocessor:
     def __init__(self, 
                 model_name: str,
                 ) -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(f"{RCFG.pretrained_model_dir}/{model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(f"{RCFG.base_model_dir}")
         self.twd = TreebankWordDetokenizer()
         self.STOP_WORDS = set(stopwords.words('english'))
         
@@ -370,8 +371,8 @@ class ContentScoreRegressor:
         self.model_dir = model_dir
         self.max_length = max_length
         
-        self.tokenizer = AutoTokenizer.from_pretrained(f"{RCFG.pretrained_model_dir}/{model_name}")
-        self.model_config = AutoConfig.from_pretrained(f"{RCFG.pretrained_model_dir}/{model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(f"{RCFG.base_model_dir}")
+        self.model_config = AutoConfig.from_pretrained(f"{RCFG.base_model_dir}")
         
         self.model_config.update({
             "hidden_dropout_prob": hidden_dropout_prob,
