@@ -76,6 +76,7 @@ class RCFG:
         'lambda_l1': 0.0,
         'lambda_l2': 0.011
      }
+     kaggle_dataset_title = "commonlit-models"
 
 class Logger:
 
@@ -956,8 +957,8 @@ class Runner():
 
         self.logger.info(f'Save {RCFG.model_dir} as kaggle dataset.')
         metadata = {
-            "title": "commonlit-models",
-            "id": "kazuakitokunaga/commonlit-models",
+            "title": RCFG.kaggle_dataset_title,
+            "id": f"kazuakitokunaga/{RCFG.kaggle_dataset_title}",
             "licenses": [
                 {
                 "name": "CC0-1.0"
