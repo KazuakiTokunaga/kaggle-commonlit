@@ -54,7 +54,6 @@ class RCFG:
     train: bool = True
     predict: bool = True
     commit_hash: str =""
-    pretrained_model_dir: str = "/kaggle/input"
     base_model_dir: str = "/kaggle/input/debertav3base"
     output_path: str = ""
     model_dir: str = "." # "/kaggle/commonlit-models"
@@ -435,7 +434,7 @@ class ContentScoreRegressor:
         valid_df = valid_df[[self.input_col] + self.target_cols]
         
         model_content = AutoModelForSequenceClassification.from_pretrained(
-            f"{RCFG.pretrained_model_dir}/{self.model_name}", 
+            f"{RCFG.base_model_dir}", 
             config=self.model_config
         )
 
