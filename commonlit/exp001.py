@@ -4,6 +4,7 @@ import pandas as pd
 import warnings
 import logging
 import os
+import gc
 import random
 import pickle
 import shutil
@@ -465,7 +466,7 @@ class ContentScoreRegressor:
             eval_steps=save_steps,
             save_steps=save_steps,
             metric_for_best_model="rmse",
-            # fp16=True,
+            fp16=True,
             save_total_limit=1
             # gradient_checkpointing=True
         )
@@ -485,6 +486,11 @@ class ContentScoreRegressor:
         model_content.save_pretrained(self.model_dir)
         self.tokenizer.save_pretrained(self.model_dir)
 
+        model_content.cpu()
+        del model_content
+        gc.collect()
+        torch.cuda.empty_cache()
+    
         
     def predict(self, 
                 test_df: pd.DataFrame,
@@ -527,6 +533,11 @@ class ContentScoreRegressor:
                       args = test_args)
 
         preds = infer_content.predict(test_tokenized_dataset)[0]
+
+        model_content.cpu()
+        del model_content
+        gc.collect()
+        torch.cuda.empty_cache()
 
         return preds
 
@@ -593,6 +604,7 @@ def train_by_fold(
 
         del csr
         torch.cuda.empty_cache()
+        print_gpu_utilization(logger)
 
 def validate(
     logger,
