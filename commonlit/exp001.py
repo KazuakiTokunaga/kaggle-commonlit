@@ -683,6 +683,7 @@ def predict(
         
         del csr
         torch.cuda.empty_cache()
+        print_gpu_utilization(logger)
 
         test_df[f"{target}_pred_{fold}"] = pred
     
