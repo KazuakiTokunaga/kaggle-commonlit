@@ -597,7 +597,6 @@ def validate(
     train_df: pd.DataFrame,
     targets: List[str],
     inputs: List[str],
-    n_splits: int,
     batch_size: int,
     model_name: str,
     hidden_dropout_prob: float,
@@ -608,7 +607,7 @@ def validate(
 
     columns = list(train_df.columns.values)
     
-    for fold in range(n_splits):
+    for fold in range(CFG.n_splits):
         print(f"fold {fold}:")
         
         valid_data = train_df[train_df["fold"] == fold]
@@ -641,7 +640,6 @@ def predict(
     test_df: pd.DataFrame,
     targets:List[str],
     inputs: List[str],
-    n_splits: int,
     batch_size: int,
     model_name: str,
     hidden_dropout_prob: float,
@@ -652,7 +650,7 @@ def predict(
     
     columns = list(test_df.columns.values)
 
-    for fold in range(n_splits):
+    for fold in range(CFG.n_splits):
         logger.info(f"fold {fold}:")
         
         model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
@@ -677,8 +675,8 @@ def predict(
         test_df[f"content_multi_pred_{fold}"] = pred_df[f"content_pred"].values
         test_df[f"wording_multi_pred_{fold}"] = pred_df[f"wording_pred"].values
 
-    test_df[f"content_multi_pred"] = test_df[[f"content_multi_pred_{fold}" for fold in range(n_splits)]].mean(axis=1)
-    test_df[f"wording_multi_pred"] = test_df[[f"wording_multi_pred_{fold}" for fold in range(n_splits)]].mean(axis=1)
+    test_df[f"content_multi_pred"] = test_df[[f"content_multi_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+    test_df[f"wording_multi_pred"] = test_df[[f"wording_multi_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
     
     return test_df[columns + [f"content_multi_pred", f"wording_multi_pred"]]
 
@@ -774,7 +772,6 @@ class Runner():
                 attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
                 weight_decay=CFG.weight_decay,
                 num_train_epochs=CFG.num_train_epochs,
-                n_splits=CFG.n_splits,
                 batch_size=CFG.batch_size,
                 save_steps=CFG.save_steps,
                 max_length=CFG.max_length,
