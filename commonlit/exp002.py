@@ -389,6 +389,7 @@ class ScoreRegressor:
         )
 
     def concatenate_with_sep_token(self, row):
+        print(row[self.input_text_cols])
         sep = " " + self.tokenizer.sep_token + " "        
         return sep.join(row[self.input_text_cols])
 
@@ -753,7 +754,7 @@ class Runner():
             self.augtrain = self.augtrain.merge(df_master, on="student_id", how="left")
             self.augtrain = self.augtrain[self.augtrain['prompt_id'].notnull()]
 
-        input_cols = ["prompt_title", "prompt_question", "text"]
+        input_cols = ["prompt_title", "prompt_question", "fixed_summary_text"]
 
         if RCFG.train:
             
