@@ -389,7 +389,6 @@ class ScoreRegressor:
         )
 
     def concatenate_with_sep_token(self, row):
-        print(row[self.input_text_cols])
         sep = " " + self.tokenizer.sep_token + " "        
         return sep.join(row[self.input_text_cols])
 
