@@ -47,7 +47,6 @@ class CFG:
     random_seed: int =42
     save_steps: int =100
     max_length: int =512
-    save_each_model: bool =True
 
 class RCFG:
     debug: bool =True
@@ -537,8 +536,6 @@ def train_by_fold(
         model_name: str,
         targets: List[str],
         inputs: List[str],
-        save_each_model: bool,
-        n_splits: int,
         batch_size: int,
         learning_rate: int,
         hidden_dropout_prob: float,
@@ -600,7 +597,6 @@ def validate(
     train_df: pd.DataFrame,
     targets: List[str],
     inputs: List[str],
-    save_each_model: bool,
     n_splits: int,
     batch_size: int,
     model_name: str,
@@ -645,7 +641,6 @@ def predict(
     test_df: pd.DataFrame,
     targets:List[str],
     inputs: List[str],
-    save_each_model: bool,
     n_splits: int,
     batch_size: int,
     model_name: str,
@@ -824,7 +819,7 @@ class Runner():
             print_gpu_utilization(self.logger) # 7117, 7115 (6137, 6137)
         
         if RCFG.train:
-            self.train.to_csv(f'{RCFG.output_path}train_processed.csv', index=False)
+            self.train.to_csv(f'{RCFG.model_dir}/train_processed.csv', index=False)
 
     def run_lgbm(self):
 
