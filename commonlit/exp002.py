@@ -394,11 +394,11 @@ class ScoreRegressor:
         return sep.join(row[self.input_text_cols])
 
     def tokenize_function(self, examples: pd.DataFrame):
-        labels = [examples[self.target]]
+        labels = [examples["content"], examples["wording"]]
         tokenized = self.tokenizer(examples[self.input_col],
-                         padding=False,
-                         truncation=True,
-                         max_length=self.max_length)
+                        padding="max_length",
+                        truncation=True,
+                        max_length=self.max_length)
         return {
             **tokenized,
             "labels": labels,
@@ -406,9 +406,9 @@ class ScoreRegressor:
     
     def tokenize_function_test(self, examples: pd.DataFrame):
         tokenized = self.tokenizer(examples[self.input_col],
-                         padding=False,
-                         truncation=True,
-                         max_length=self.max_length)
+                        padding="max_length",
+                        truncation=True,
+                        max_length=self.max_length)
         return tokenized
         
     def train(self, 
