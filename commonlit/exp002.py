@@ -929,12 +929,7 @@ class Runner():
                         "student_id", "prompt_id", "text",  "fixed_summary_text",
                         "prompt_question", "prompt_title", 
                         "prompt_text",
-                        "input"
-                    ] + [
-                        f"content_pred_{i}" for i in range(CFG.n_splits)
-                        ] + [
-                        f"wording_pred_{i}" for i in range(CFG.n_splits)
-                        ]
+                    ]
 
         pred_dict = {}
         for target in self.targets:
