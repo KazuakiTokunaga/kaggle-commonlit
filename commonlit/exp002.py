@@ -783,7 +783,7 @@ class Runner():
             self.train = validate(
                 logger=self.logger,
                 train_df=self.train,
-                target=target,
+                targets=self.targets,
                 model_name=CFG.model_name,
                 hidden_dropout_prob=CFG.hidden_dropout_prob,
                 attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
