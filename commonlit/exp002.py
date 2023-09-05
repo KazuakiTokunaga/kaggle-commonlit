@@ -522,6 +522,13 @@ class ScoreRegressor:
                       args = test_args)
 
         preds = infer_content.predict(test_tokenized_dataset)[0]
+        pred_df = pd.DataFrame(
+                    preds, 
+                    columns=[
+                        f"content_pred", 
+                        f"wording_pred"
+                    ]
+                )
 
         model_content.cpu()
         del model_content
