@@ -488,6 +488,7 @@ class ScoreRegressor:
         
     def predict(self, 
                 test_df: pd.DataFrame,
+                batch_size: int,
                 fold: int,
                ):
         """predict content score"""
@@ -509,7 +510,7 @@ class ScoreRegressor:
             output_dir=model_fold_dir,
             do_train = False,
             do_predict = True,
-            per_device_eval_batch_size = 4,   
+            per_device_eval_batch_size=batch_size,
             dataloader_drop_last = False,
         )
 
