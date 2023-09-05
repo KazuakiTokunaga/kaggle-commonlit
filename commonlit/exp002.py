@@ -637,10 +637,7 @@ def validate(
             batch_size=batch_size,
             fold=fold
         )
-
-        display(pred_df)
-        display(train_df)
-        display(valid_data)
+        
         train_df.loc[valid_data.index, f"content_multi_pred"] = pred_df[f"content_pred"].values
         train_df.loc[valid_data.index, f"wording_multi_pred"] = pred_df[f"wording_pred"].values
                 
@@ -805,7 +802,7 @@ class Runner():
 
             # set validate result
             for target in self.targets:
-                rmse = mean_squared_error(self.train[target], self.self.train[f"{target}_multi_pred"], squared=False)
+                rmse = mean_squared_error(self.train[target], self.train[f"{target}_multi_pred"], squared=False)
                 print(f"cv {target} rmse: {rmse}")
             self.logger.info(f"cv {target} rmse: {rmse}")
             self.data_to_write.append(rmse)
