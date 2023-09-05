@@ -324,10 +324,10 @@ class Preprocessor:
         return input_df.drop(columns=["summary_tokens", "prompt_tokens"])
 
 
-def compute_rmse_loss(outputs, targets):
-    mse_loss = torch.mean((outputs - targets) ** 2, dim=0)  # Compute MSE for each dimension
-    rmse_loss = torch.sqrt(mse_loss)  # Compute RMSE for each dimension
-    return torch.mean(rmse_loss)
+def compute_metrics(eval_pred):
+    predictions, labels = eval_pred
+    rmse = mean_squared_error(labels, predictions, squared=False)
+    return {"rmse": rmse}
 
 def compute_mcrmse(eval_pred):
     """
@@ -448,7 +448,7 @@ class ScoreRegressor:
             load_best_model_at_end=True, # select best model
             learning_rate=learning_rate,
             # per_gpu_train_batch_size=batch_size
-            # gradient_accumulation_steps=4,
+            gradient_accumulation_steps=4,
             per_device_train_batch_size=12, # batch_sizeは12 = 3 * 4
             per_device_eval_batch_size=8,
             num_train_epochs=num_train_epochs,
@@ -474,7 +474,6 @@ class ScoreRegressor:
             compute_metrics=compute_mcrmse,
             data_collator=self.data_collator
         )
-        trainer.compute_loss = compute_rmse_loss
 
         trainer.train()
         
