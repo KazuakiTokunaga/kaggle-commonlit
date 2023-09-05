@@ -572,7 +572,7 @@ def train_by_fold(
             model_name=model_name,
             target_cols=targets,
             inputs= inputs,
-            model_dir = model_dir, 
+            model_dir = fold_model_dir, 
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
