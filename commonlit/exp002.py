@@ -631,6 +631,9 @@ def validate(
             fold=fold
         )
 
+        display(pred_df)
+        display(train_df)
+        display(valid_data)
         train_df.loc[valid_data.index, f"content_multi_pred"] = pred_df[f"content_pred"].values
         train_df.loc[valid_data.index, f"wording_multi_pred"] = pred_df[f"wording_pred"].values
                 
