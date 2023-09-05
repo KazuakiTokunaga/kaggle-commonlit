@@ -327,7 +327,7 @@ class Preprocessor:
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
     rmse = mean_squared_error(labels, predictions, squared=False)
-    return {"rmse": rmse}
+    return rmse
 
 def compute_mcrmse(eval_pred):
     """
@@ -460,6 +460,7 @@ class ScoreRegressor:
             eval_steps=save_steps,
             save_steps=save_steps,
             metric_for_best_model="mcrmse",
+            compute_loss=compute_metrics,
             fp16=True,
             save_total_limit=1
             # gradient_checkpointing=True
