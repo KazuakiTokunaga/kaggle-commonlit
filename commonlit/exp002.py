@@ -637,7 +637,7 @@ def validate(
             batch_size=batch_size,
             fold=fold
         )
-        
+
         train_df.loc[valid_data.index, f"content_multi_pred"] = pred_df[f"content_pred"].values
         train_df.loc[valid_data.index, f"wording_multi_pred"] = pred_df[f"wording_pred"].values
                 
@@ -816,6 +816,7 @@ class Runner():
                 test_df=self.test,
                 targets=self.targets,
                 inputs = input_cols,
+                batch_size=CFG.batch_size,
                 model_name=CFG.model_name,
                 hidden_dropout_prob=CFG.hidden_dropout_prob,
                 attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
