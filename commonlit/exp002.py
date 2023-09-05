@@ -460,7 +460,6 @@ class ScoreRegressor:
             eval_steps=save_steps,
             save_steps=save_steps,
             metric_for_best_model="mcrmse",
-            compute_loss=compute_metrics,
             fp16=True,
             save_total_limit=1
             # gradient_checkpointing=True
@@ -472,6 +471,7 @@ class ScoreRegressor:
             train_dataset=train_tokenized_datasets,
             eval_dataset=val_tokenized_datasets,
             tokenizer=self.tokenizer,
+            compute_loss=compute_metrics,
             compute_metrics=compute_mcrmse,
             data_collator=self.data_collator
         )
