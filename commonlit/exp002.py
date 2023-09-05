@@ -471,10 +471,10 @@ class ScoreRegressor:
             train_dataset=train_tokenized_datasets,
             eval_dataset=val_tokenized_datasets,
             tokenizer=self.tokenizer,
-            compute_loss=compute_metrics,
             compute_metrics=compute_mcrmse,
             data_collator=self.data_collator
         )
+        trainer.compute_loss = compute_metrics
 
         trainer.train()
         
