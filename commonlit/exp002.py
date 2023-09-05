@@ -535,7 +535,7 @@ class ScoreRegressor:
         gc.collect()
         torch.cuda.empty_cache()
 
-        return preds
+        return pred_df
 
 
 def train_by_fold(
