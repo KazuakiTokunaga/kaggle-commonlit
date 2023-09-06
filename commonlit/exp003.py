@@ -457,10 +457,7 @@ class ScoreRegressor:
         
         seed_everything(seed=42)
 
-        base_data_collator = DataCollatorWithPadding(
-            tokenizer=self.tokenizer
-        )
-        self.data_collator = CustomDataCollator(base_data_collator)
+        self.data_collator = CustomDataCollator(self.tokenizer)
 
     def concatenate_with_sep_token(self, row):
         sep = " " + self.tokenizer.sep_token + " "        
