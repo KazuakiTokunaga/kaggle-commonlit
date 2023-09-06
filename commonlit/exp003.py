@@ -374,6 +374,7 @@ class CustomTransformersModel(nn.Module):
 
     def forward(self, input_ids, features, attention_mask=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
+        print(outputs)
         return self.classifier(torch.cat((outputs[1], features), 1))
     
 
