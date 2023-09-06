@@ -464,8 +464,10 @@ class ScoreRegressor:
         valid_df[self.input_col] = valid_df.apply(self.concatenate_with_sep_token, axis=1) 
         
         train_df['features'] = train_df[self.additional_feature_cols].to_numpy().tolist()
+        valid_df['features'] = valid_df[self.additional_feature_cols].to_numpy().tolist()
         train_df = train_df[[self.input_col] + ['features'] + self.target_cols]
         valid_df = valid_df[[self.input_col] + ['features'] +  self.target_cols]
+        display(train_df)
         
         model_content = AutoModelForSequenceClassification.from_pretrained(
             f"{RCFG.base_model_dir}", 
@@ -539,8 +541,11 @@ class ScoreRegressor:
         sep = self.tokenizer.sep_token
         test_df[self.input_col] = test_df.apply(self.concatenate_with_sep_token, axis=1)
 
-        test_ = test_df[[self.input_col]]
-    
+        test_df['features'] = test_df[self.additional_feature_cols].to_numpy().tolist()
+        test_df = test_df[[self.input_col] + ['features'] + self.target_cols]
+
+        test_ = test_df[[self.input_col] + ['features']]
+
         test_dataset = Dataset.from_pandas(test_, preserve_index=False) 
         test_tokenized_dataset = test_dataset.map(self.tokenize_function_test, batched=False)
 
