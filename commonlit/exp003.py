@@ -375,7 +375,18 @@ class CustomTransformersModel(nn.Module):
     def forward(self, input_ids, additional_features, attention_mask=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
         return self.classifier(torch.cat((outputs[1], additional_features)), 1)
+    
 
+class CustomDataCollator(DataCollatorWithPadding):
+    def __call__(self, batch):
+        # テキストデータのパディング
+        batch_to_pad = [{k: v for k, v in item.items() if k != "features"} for item in batch]
+        batch_padded = super().__call__(batch_to_pad)
+        
+        # 追加の特徴量の結合
+        batch_padded["features"] = torch.stack([item["features"] for item in batch])
+        
+        return batch_padded
 
 class ScoreRegressor:
     def __init__(
@@ -422,9 +433,10 @@ class ScoreRegressor:
         
         seed_everything(seed=42)
 
-        self.data_collator = DataCollatorWithPadding(
+        base_data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer
         )
+        self.data_collator = CustomDataCollator(base_data_collator)
 
     def concatenate_with_sep_token(self, row):
         sep = " " + self.tokenizer.sep_token + " "        
@@ -550,7 +562,13 @@ class ScoreRegressor:
         test_tokenized_dataset = test_dataset.map(self.tokenize_function_test, batched=False)
 
         model_content = AutoModelForSequenceClassification.from_pretrained(f"{self.model_dir}")
-        model_content.eval()
+        custom_model = CustomTransformersModel(
+            model_content, 
+            num_labels=2, 
+            additional_features_dim=len(self.additional_feature_cols)
+        )
+        
+        custom_model.eval()
         
         model_fold_dir = os.path.join(self.model_dir, str(fold)) 
 
@@ -564,7 +582,7 @@ class ScoreRegressor:
 
         # init trainer
         infer_content = Trainer(
-                      model = model_content, 
+                      model = custom_model, 
                       tokenizer=self.tokenizer,
                       data_collator=self.data_collator,
                       args = test_args)
@@ -578,8 +596,8 @@ class ScoreRegressor:
                     ]
                 )
 
-        model_content.cpu()
-        del model_content
+        custom_model.cpu()
+        del custom_model
         gc.collect()
         torch.cuda.empty_cache()
 
