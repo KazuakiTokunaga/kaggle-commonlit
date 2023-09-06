@@ -377,41 +377,6 @@ class CustomTransformersModel(nn.Module):
         return self.classifier(torch.cat((outputs[1], additional_features)), 1)
     
 
-# class CustomDataCollator(DataCollatorWithPadding):
-#     def __init__(self, tokenizer):
-#         super().__init__(tokenizer)
-    
-#     def __call__(self, batch):
-#         # テキストデータのパディング
-#         batch_to_pad = [{k: v for k, v in item.items() if k != "features"} for item in batch]
-#         batch_padded = super().__call__(batch_to_pad)
-        
-#         # 追加の特徴量の結合
-#         batch_padded["features"] = torch.stack([item["features"] for item in batch])
-        
-#         return batch_padded
-
-
-class CustomDataCollator:
-    def __init__(self, tokenizer):
-        self.tokenizer = tokenizer
-
-    def __call__(self, batch):
-        # テキストデータのパディング
-        print(batch)
-        input_ids = [item["input_ids"].tolist() for item in batch]
-        attention_masks = [item["attention_mask"].tolist() for item in batch]
-        input_ids_padded = self.tokenizer.pad({"input_ids": input_ids}, return_tensors="pt")["input_ids"]
-        attention_masks_padded = self.tokenizer.pad({"attention_mask": attention_masks}, return_tensors="pt")["attention_mask"]
-            
-        # 追加の特徴量の結合
-        features = torch.stack([item["features"] for item in batch])
-        
-        return {
-            "input_ids": input_ids_padded,
-            "attention_mask": attention_masks_padded,
-            "features": features
-        }
 
 class ScoreRegressor:
     def __init__(
@@ -458,7 +423,9 @@ class ScoreRegressor:
         
         seed_everything(seed=42)
 
-        self.data_collator = CustomDataCollator(self.tokenizer)
+        self.data_collator = DataCollatorWithPadding(
+            tokenizer=self.tokenizer
+        )
 
     def concatenate_with_sep_token(self, row):
         sep = " " + self.tokenizer.sep_token + " "        
@@ -466,6 +433,7 @@ class ScoreRegressor:
 
     def tokenize_function(self, examples: pd.DataFrame):
         labels = [examples["content"], examples["wording"]]
+        features = examples['features']
         tokenized = self.tokenizer(examples[self.input_col],
                         padding="max_length",
                         truncation=True,
@@ -473,6 +441,7 @@ class ScoreRegressor:
         return {
             **tokenized,
             "labels": labels,
+            "features": features
         }
     
     def tokenize_function_test(self, examples: pd.DataFrame):
@@ -501,7 +470,7 @@ class ScoreRegressor:
         valid_df['features'] = valid_df[self.additional_feature_cols].to_numpy().tolist()
         train_df = train_df[[self.input_col] + ['features'] + self.target_cols]
         valid_df = valid_df[[self.input_col] + ['features'] +  self.target_cols]
-        display(train_df)
+
         
         model_content = AutoModelForSequenceClassification.from_pretrained(
             f"{RCFG.base_model_dir}", 
@@ -518,6 +487,7 @@ class ScoreRegressor:
     
         train_tokenized_datasets = train_dataset.map(self.tokenize_function, batched=False)
         val_tokenized_datasets = val_dataset.map(self.tokenize_function, batched=False)
+        display(train_tokenized_datasets)
 
         # eg. "bert/fold_0/"
         model_fold_dir = os.path.join(self.model_dir, str(fold)) 
