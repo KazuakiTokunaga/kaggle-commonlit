@@ -374,7 +374,8 @@ class CustomTransformersModel(nn.Module):
 
     def forward(self, input_ids, features, attention_mask=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
-        return self.classifier(torch.cat((outputs[0], features), 1))
+        print(output)
+        return self.classifier(torch.cat((outputs[1], features), 1))
     
 
 
@@ -472,7 +473,7 @@ class ScoreRegressor:
         valid_df = valid_df[[self.input_col] + ['features'] +  self.target_cols]
 
         
-        model_content = AutoModelForSequenceClassification.from_pretrained(
+        model_content = AutoModel.from_pretrained(
             f"{RCFG.base_model_dir}", 
             config=self.model_config
         )
@@ -552,7 +553,7 @@ class ScoreRegressor:
         test_dataset = Dataset.from_pandas(test_, preserve_index=False) 
         test_tokenized_dataset = test_dataset.map(self.tokenize_function_test, batched=False)
 
-        model_content = AutoModelForSequenceClassification.from_pretrained(f"{self.model_dir}")
+        model_content = AutoModel.from_pretrained(f"{self.model_dir}")
         custom_model = CustomTransformersModel(
             model_content, 
             num_labels=2, 
