@@ -487,7 +487,7 @@ class ScoreRegressor:
     
         train_tokenized_datasets = train_dataset.map(self.tokenize_function, batched=False)
         val_tokenized_datasets = val_dataset.map(self.tokenize_function, batched=False)
-        display(train_tokenized_datasets)
+        print(train_tokenized_datasets[0])
 
         # eg. "bert/fold_0/"
         model_fold_dir = os.path.join(self.model_dir, str(fold)) 
