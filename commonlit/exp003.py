@@ -399,8 +399,8 @@ class CustomDataCollator:
     def __call__(self, batch):
         # テキストデータのパディング
         print(batch)
-        input_ids = [item["input_ids"].squeeze(0) for item in batch]
-        attention_masks = [item["attention_mask"].squeeze(0) for item in batch]
+        input_ids = [item["input_ids"].tolist() for item in batch]
+        attention_masks = [item["attention_mask"].tolist() for item in batch]
         input_ids_padded = self.tokenizer.pad({"input_ids": input_ids}, return_tensors="pt")["input_ids"]
         attention_masks_padded = self.tokenizer.pad({"attention_mask": attention_masks}, return_tensors="pt")["attention_mask"]
             
