@@ -378,6 +378,9 @@ class CustomTransformersModel(nn.Module):
     
 
 class CustomDataCollator(DataCollatorWithPadding):
+    def __init__(self, tokenizer):
+        super().__init__(tokenizer)
+    
     def __call__(self, batch):
         # テキストデータのパディング
         batch_to_pad = [{k: v for k, v in item.items() if k != "features"} for item in batch]
