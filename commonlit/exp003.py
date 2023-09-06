@@ -1,3 +1,4 @@
+# 特徴量も合わせて学習する
 from typing import List
 import numpy as np 
 import pandas as pd 
@@ -20,6 +21,7 @@ from transformers import TrainingArguments, Trainer
 from datasets import load_metric, disable_progress_bar
 from sklearn.metrics import mean_squared_error
 import torch
+import torch.nn as nn
 from sklearn.model_selection import KFold, GroupKFold
 from oauth2client.service_account import ServiceAccountCredentials
 from tqdm import tqdm
@@ -47,7 +49,6 @@ class CFG:
     random_seed: int =42
     save_steps: int =100
     max_length: int =512
-    save_each_model: bool =True
 
 class RCFG:
     debug: bool =True
@@ -140,9 +141,9 @@ def class_vars_to_dict(cls):
 
 
 def print_gpu_utilization(logger):
-    nvmlInit()
-    handle = nvmlDeviceGetHandleByIndex(0)
-    info = nvmlDeviceGetMemoryInfo(handle)
+    nvmlInit()  #noqa
+    handle = nvmlDeviceGetHandleByIndex(0) # noqa
+    info = nvmlDeviceGetMemoryInfo(handle) # noqa
     logger.info(f"GPU memory occupied: {info.used//1024**2} MB.")
 
 
@@ -352,21 +353,58 @@ def compt_score(content_true, content_pred, wording_true, wording_pred):
     
     return (content_score + wording_score)/2
 
-class ContentScoreRegressor:
-    def __init__(self, 
-                model_name: str,
-                model_dir: str,
-                target: str,
-                hidden_dropout_prob: float,
-                attention_probs_dropout_prob: float,
-                max_length: int,
-                ):
-        self.inputs = ["prompt_text", "prompt_title", "prompt_question", "fixed_summary_text"]
-        self.input_col = "input"
-        
-        self.text_cols = [self.input_col] 
-        self.target = target
-        self.target_cols = [target]
+
+class CustomTransformersModel(nn.Module):
+    def __init__(self, base_model, num_labels, additional_features_dim, hidden_units=200, dropout=0.2):
+        super(CustomTransformersModel, self).__init__()
+        self.base_model = base_model
+        self.additional_features_dim = additional_features_dim
+
+        self.dropout = nn.Dropout(dropout)
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(
+                base_model.config.hidden_size + additional_features_dim, 
+                hidden_units,
+            ),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_units, num_labels)
+        )
+
+    def forward(self, input_ids, additional_features, attention_mask=None):
+        outputs = self.base_model(input_ids, attention_mask=attention_mask)
+        return self.classifier(torch.cat((outputs[1], additional_features)), 1)
+
+
+class ScoreRegressor:
+    def __init__(
+        self, 
+        model_name: str,
+        model_dir: str,
+        inputs: List[str],
+        target_cols: List[str],
+        hidden_dropout_prob: float,
+        attention_probs_dropout_prob: float,
+        max_length: int,
+    ):
+
+
+        self.input_col = "input"        
+        self.input_text_cols = inputs 
+        self.target_cols = target_cols
+        self.additional_feature_cols = [
+            "summary_length", 
+            "splling_err_num", 
+            "prompt_length",
+            "length_ratio",
+            "word_overlap_count",
+            "bigram_overlap_count",
+            "bigram_overlap_ratio",
+            "trigram_overlap_count",
+            "trigram_overlap_ratio",
+            "quotes_count"
+        ]
 
         self.model_name = model_name
         self.model_dir = model_dir
@@ -378,7 +416,7 @@ class ContentScoreRegressor:
         self.model_config.update({
             "hidden_dropout_prob": hidden_dropout_prob,
             "attention_probs_dropout_prob": attention_probs_dropout_prob,
-            "num_labels": 1,
+            "num_labels": 2,
             "problem_type": "regression",
         })
         
@@ -388,13 +426,16 @@ class ContentScoreRegressor:
             tokenizer=self.tokenizer
         )
 
+    def concatenate_with_sep_token(self, row):
+        sep = " " + self.tokenizer.sep_token + " "        
+        return sep.join(row[self.input_text_cols])
 
     def tokenize_function(self, examples: pd.DataFrame):
-        labels = [examples[self.target]]
+        labels = [examples["content"], examples["wording"]]
         tokenized = self.tokenizer(examples[self.input_col],
-                         padding=False,
-                         truncation=True,
-                         max_length=self.max_length)
+                        padding="max_length",
+                        truncation=True,
+                        max_length=self.max_length)
         return {
             **tokenized,
             "labels": labels,
@@ -402,9 +443,9 @@ class ContentScoreRegressor:
     
     def tokenize_function_test(self, examples: pd.DataFrame):
         tokenized = self.tokenizer(examples[self.input_col],
-                         padding=False,
-                         truncation=True,
-                         max_length=self.max_length)
+                        padding="max_length",
+                        truncation=True,
+                        max_length=self.max_length)
         return tokenized
         
     def train(self, 
@@ -419,25 +460,21 @@ class ContentScoreRegressor:
         ) -> None:
         """fine-tuning"""
         
-        sep = self.tokenizer.sep_token
-        train_df[self.input_col] = (
-                    train_df["prompt_title"] + sep 
-                    + train_df["prompt_question"] + sep 
-                    + train_df["fixed_summary_text"]
-                  )
-
-        valid_df[self.input_col] = (
-                    valid_df["prompt_title"] + sep 
-                    + valid_df["prompt_question"] + sep 
-                    + valid_df["fixed_summary_text"]
-                  )
+        train_df[self.input_col] = train_df.apply(self.concatenate_with_sep_token, axis=1)
+        valid_df[self.input_col] = valid_df.apply(self.concatenate_with_sep_token, axis=1) 
         
-        train_df = train_df[[self.input_col] + self.target_cols]
-        valid_df = valid_df[[self.input_col] + self.target_cols]
+        train_df['features'] = train_df[self.additional_feature_cols].to_numpy().tolist()
+        train_df = train_df[[self.input_col] + ['features'] + self.target_cols]
+        valid_df = valid_df[[self.input_col] + ['features'] +  self.target_cols]
         
         model_content = AutoModelForSequenceClassification.from_pretrained(
             f"{RCFG.base_model_dir}", 
             config=self.model_config
+        )
+        custom_model = CustomTransformersModel(
+            model_content, 
+            num_labels=2, 
+            additional_features_dim=len(self.additional_feature_cols)
         )
 
         train_dataset = Dataset.from_pandas(train_df, preserve_index=False) 
@@ -455,7 +492,7 @@ class ContentScoreRegressor:
             learning_rate=learning_rate,
             # per_gpu_train_batch_size=batch_size
             gradient_accumulation_steps=4,
-            per_device_train_batch_size=3, # batch_sizeは12 = 3 * 4
+            per_device_train_batch_size=12, # batch_sizeは12 = 3 * 4
             per_device_eval_batch_size=8,
             num_train_epochs=num_train_epochs,
             weight_decay=weight_decay,
@@ -465,46 +502,42 @@ class ContentScoreRegressor:
             evaluation_strategy="steps",
             eval_steps=save_steps,
             save_steps=save_steps,
-            metric_for_best_model="rmse",
+            metric_for_best_model="mcrmse",
             fp16=True,
             save_total_limit=1
             # gradient_checkpointing=True
         )
 
         trainer = Trainer(
-            model=model_content,
+            model=custom_model,
             args=training_args,
             train_dataset=train_tokenized_datasets,
             eval_dataset=val_tokenized_datasets,
             tokenizer=self.tokenizer,
-            compute_metrics=compute_metrics,
+            compute_metrics=compute_mcrmse,
             data_collator=self.data_collator
         )
 
         trainer.train()
         
-        model_content.save_pretrained(self.model_dir)
+        custom_model.save_pretrained(self.model_dir)
         self.tokenizer.save_pretrained(self.model_dir)
 
-        model_content.cpu()
-        del model_content
+        custom_model.cpu()
+        del custom_model
         gc.collect()
         torch.cuda.empty_cache()
     
         
     def predict(self, 
                 test_df: pd.DataFrame,
+                batch_size: int,
                 fold: int,
                ):
         """predict content score"""
         
         sep = self.tokenizer.sep_token
-        in_text = (
-                    test_df["prompt_title"] + sep 
-                    + test_df["prompt_question"] + sep 
-                    + test_df["fixed_summary_text"]
-                  )
-        test_df[self.input_col] = in_text
+        test_df[self.input_col] = test_df.apply(self.concatenate_with_sep_token, axis=1)
 
         test_ = test_df[[self.input_col]]
     
@@ -514,14 +547,13 @@ class ContentScoreRegressor:
         model_content = AutoModelForSequenceClassification.from_pretrained(f"{self.model_dir}")
         model_content.eval()
         
-        # e.g. "bert/fold_0/"
         model_fold_dir = os.path.join(self.model_dir, str(fold)) 
 
         test_args = TrainingArguments(
             output_dir=model_fold_dir,
             do_train = False,
             do_predict = True,
-            per_device_eval_batch_size = 4,   
+            per_device_eval_batch_size=batch_size,
             dataloader_drop_last = False,
         )
 
@@ -533,21 +565,28 @@ class ContentScoreRegressor:
                       args = test_args)
 
         preds = infer_content.predict(test_tokenized_dataset)[0]
+        pred_df = pd.DataFrame(
+                    preds, 
+                    columns=[
+                        f"content_pred", 
+                        f"wording_pred"
+                    ]
+                )
 
         model_content.cpu()
         del model_content
         gc.collect()
         torch.cuda.empty_cache()
 
-        return preds
+        return pred_df
 
 
 def train_by_fold(
         logger,
         train_df: pd.DataFrame,
         model_name: str,
-        target:str,
-        n_splits: int,
+        targets: List[str],
+        inputs: List[str],
         batch_size: int,
         learning_rate: int,
         hidden_dropout_prob: float,
@@ -559,10 +598,7 @@ def train_by_fold(
         df_augtrain = None
     ):
 
-    if CFG.save_each_model:
-        model_dir =  f"{RCFG.model_dir}/{target}/{model_name}"
-    else: 
-        model_dir =  f"{RCFG.model_dir}/{model_name}"
+    model_dir =  f"{RCFG.model_dir}/{model_name}"
     logger.info(f'training model dir: {model_dir}.')
 
     # delete old model files
@@ -576,20 +612,21 @@ def train_by_fold(
         train_data = train_df[train_df["fold"] != fold]
         valid_data = train_df[train_df["fold"] == fold]
 
-        if RCFG.use_aug_data and target=='content': # back_translationはcontentのみ
+        if RCFG.use_aug_data: 
             logger.info('Augment data by back translation.')
             train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
             train_data = pd.concat([train_data, train_aug_data])
         
         fold_model_dir = f'{model_dir}/fold_{fold}'
-        csr = ContentScoreRegressor(
+        csr = ScoreRegressor(
             model_name=model_name,
-            target=target,
+            target_cols=targets,
+            inputs= inputs,
             model_dir = fold_model_dir, 
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
-           )
+        )
         
         csr.train(
             fold=fold,
@@ -609,87 +646,90 @@ def train_by_fold(
 def validate(
     logger,
     train_df: pd.DataFrame,
-    target:str,
+    targets: List[str],
+    inputs: List[str],
+    batch_size: int,
     model_name: str,
     hidden_dropout_prob: float,
     attention_probs_dropout_prob: float,
     max_length : int
-    ) -> pd.DataFrame:
+) -> pd.DataFrame:
     """predict oof data"""
+
+    columns = list(train_df.columns.values)
+    
     for fold in range(CFG.n_splits):
-        logger.info(f"fold {fold}:")
+        print(f"fold {fold}:")
         
         valid_data = train_df[train_df["fold"] == fold]
         
-        if CFG.save_each_model:
-            model_dir =  f"{RCFG.model_dir}/{target}/{model_name}/fold_{fold}"
-        else: 
-            model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
+        model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
         
-        csr = ContentScoreRegressor(
+        csr = ScoreRegressor(
             model_name=model_name,
-            target=target,
-            model_dir = model_dir, # モデル・foldごとにモデルファイルの保存先のdirを分ける
+            target_cols=targets,
+            inputs= inputs,
+            model_dir = model_dir,
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
-        )
-
-        pred = csr.predict(
+           )
+        
+        pred_df = csr.predict(
             test_df=valid_data, 
+            batch_size=batch_size,
             fold=fold
         )
 
-        del csr
-        torch.cuda.empty_cache()
-        
-        train_df.loc[valid_data.index, f"{target}_pred"] = pred
+        train_df.loc[valid_data.index, f"content_multi_pred"] = pred_df[f"content_pred"].values
+        train_df.loc[valid_data.index, f"wording_multi_pred"] = pred_df[f"wording_pred"].values
+                
+    return train_df[columns + [f"content_multi_pred", f"wording_multi_pred"]]
 
-    return train_df
-    
 def predict(
     logger,
     test_df: pd.DataFrame,
-    target:str,
+    targets:List[str],
+    inputs: List[str],
+    batch_size: int,
     model_name: str,
     hidden_dropout_prob: float,
     attention_probs_dropout_prob: float,
     max_length : int
     ):
     """predict using mean folds"""
+    
+    columns = list(test_df.columns.values)
 
     for fold in range(CFG.n_splits):
         logger.info(f"fold {fold}:")
         
-        if CFG.save_each_model:
-            model_dir =  f"{RCFG.model_dir}/{target}/{model_name}/fold_{fold}"
-        else: 
-            model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
+        model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
         logger.info(f'prediction model dir: {model_dir}.')
 
-        csr = ContentScoreRegressor(
+        csr = ScoreRegressor(
             model_name=model_name,
-            target=target,
+            target_cols=targets,
+            inputs= inputs,
             model_dir = model_dir, 
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
            )
         
-        pred = csr.predict(
+        pred_df = csr.predict(
             test_df=test_df, 
+            batch_size=batch_size,
             fold=fold
         )
-        
-        del csr
-        torch.cuda.empty_cache()
-        print_gpu_utilization(logger)
 
-        test_df[f"{target}_pred_{fold}"] = pred
+        test_df[f"content_multi_pred_{fold}"] = pred_df[f"content_pred"].values
+        test_df[f"wording_multi_pred_{fold}"] = pred_df[f"wording_pred"].values
+
+    test_df[f"content_multi_pred"] = test_df[[f"content_multi_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+    test_df[f"wording_multi_pred"] = test_df[[f"wording_multi_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
     
-    test_df[f"{target}"] = test_df[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
-
-    return test_df
+    return test_df[columns + [f"content_multi_pred", f"wording_multi_pred"]]
 
 
 class Runner():
@@ -764,67 +804,73 @@ class Runner():
             self.augtrain = self.augtrain.merge(df_master, on="student_id", how="left")
             self.augtrain = self.augtrain[self.augtrain['prompt_id'].notnull()]
 
-        for target in self.targets:
-            self.logger.info(f'Start training: {target}.')
+        input_cols = ["prompt_title", "prompt_question", "fixed_summary_text"]
 
-            if RCFG.train:
-                
-                torch.cuda.empty_cache()
-                print_gpu_utilization(self.logger) # 2, 7117　(2, 6137)
-                self.logger.info(f'Start training by fold.')
-                
-                train_by_fold(
-                    logger=self.logger,
-                    train_df=self.train,
-                    model_name=CFG.model_name,
-                    target=target,
-                    learning_rate=CFG.learning_rate,
-                    hidden_dropout_prob=CFG.hidden_dropout_prob,
-                    attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                    weight_decay=CFG.weight_decay,
-                    num_train_epochs=CFG.num_train_epochs,
-                    n_splits=CFG.n_splits,
-                    batch_size=CFG.batch_size,
-                    save_steps=CFG.save_steps,
-                    max_length=CFG.max_length,
-                    df_augtrain = self.augtrain
-                )
-                
-                print_gpu_utilization(self.logger) # 7117, 6739 (1719, 1719)
-                self.logger.info(f'Start creating oof prediction.')
-                self.train = validate(
-                    logger=self.logger,
-                    train_df=self.train,
-                    target=target,
-                    model_name=CFG.model_name,
-                    hidden_dropout_prob=CFG.hidden_dropout_prob,
-                    attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                    max_length=CFG.max_length
-                )
+        if RCFG.train:
+            
+            torch.cuda.empty_cache()
+            print_gpu_utilization(self.logger) # 2, 7117　(2, 6137)
+            self.logger.info(f'Start training by fold.')
+            
+            train_by_fold(
+                logger=self.logger,
+                train_df=self.train,
+                model_name=CFG.model_name,
+                targets=self.targets,
+                inputs=input_cols,
+                learning_rate=CFG.learning_rate,
+                hidden_dropout_prob=CFG.hidden_dropout_prob,
+                attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
+                weight_decay=CFG.weight_decay,
+                num_train_epochs=CFG.num_train_epochs,
+                batch_size=CFG.batch_size,
+                save_steps=CFG.save_steps,
+                max_length=CFG.max_length,
+                df_augtrain = self.augtrain
+            )
+            
+            print_gpu_utilization(self.logger) # 7117, 6739 (1719, 1719)
+            self.logger.info(f'Start creating oof prediction.')
+            self.train = validate(
+                logger=self.logger,
+                train_df=self.train,
+                targets=self.targets,
+                inputs=input_cols,
+                batch_size=CFG.batch_size,
+                model_name=CFG.model_name,
+                hidden_dropout_prob=CFG.hidden_dropout_prob,
+                attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
+                max_length=CFG.max_length
+            )
 
-                rmse = mean_squared_error(self.train[target], self.train[f"{target}_pred"], squared=False)
+            # set validate result
+            for target in self.targets:
+                rmse = mean_squared_error(self.train[target], self.train[f"{target}_multi_pred"], squared=False)
+                print(f"cv {target} rmse: {rmse}")
                 self.logger.info(f"cv {target} rmse: {rmse}")
                 self.data_to_write.append(rmse)
+        
+        if RCFG.predict:
             
-            if RCFG.predict:
-                
-                print_gpu_utilization(self.logger) # 7117, 6739 (3907, 3907)
-                self.logger.info(f'Start Predicting.')
-                self.test = predict(
-                    logger=self.logger,
-                    test_df=self.test,
-                    target=target,
-                    model_name=CFG.model_name,
-                    hidden_dropout_prob=CFG.hidden_dropout_prob,
-                    attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
-                    max_length=CFG.max_length
-                )
+            print_gpu_utilization(self.logger) # 7117, 6739 (3907, 3907)
+            self.logger.info(f'Start Predicting.')
+            self.test = predict(
+                logger=self.logger,
+                test_df=self.test,
+                targets=self.targets,
+                inputs = input_cols,
+                batch_size=CFG.batch_size,
+                model_name=CFG.model_name,
+                hidden_dropout_prob=CFG.hidden_dropout_prob,
+                attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
+                max_length=CFG.max_length
+            )
 
 
-                print_gpu_utilization(self.logger) # 7117, 7115 (6137, 6137)
+            print_gpu_utilization(self.logger) # 7117, 7115 (6137, 6137)
         
         if RCFG.train:
-            self.train.to_csv(f'{RCFG.output_path}train_processed.csv', index=False)
+            self.train.to_csv(f'{RCFG.model_dir}/train_processed.csv', index=False)
 
     def run_lgbm(self):
 
@@ -926,12 +972,7 @@ class Runner():
                         "student_id", "prompt_id", "text",  "fixed_summary_text",
                         "prompt_question", "prompt_title", 
                         "prompt_text",
-                        "input"
-                    ] + [
-                        f"content_pred_{i}" for i in range(CFG.n_splits)
-                        ] + [
-                        f"wording_pred_{i}" for i in range(CFG.n_splits)
-                        ]
+                    ]
 
         pred_dict = {}
         for target in self.targets:

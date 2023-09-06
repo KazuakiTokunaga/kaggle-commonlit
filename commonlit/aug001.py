@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import json
 import datetime
-from pynvml import *
+from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
 from tqdm import tqdm
 
 import torch

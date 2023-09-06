@@ -804,8 +804,8 @@ class Runner():
             for target in self.targets:
                 rmse = mean_squared_error(self.train[target], self.train[f"{target}_multi_pred"], squared=False)
                 print(f"cv {target} rmse: {rmse}")
-            self.logger.info(f"cv {target} rmse: {rmse}")
-            self.data_to_write.append(rmse)
+                self.logger.info(f"cv {target} rmse: {rmse}")
+                self.data_to_write.append(rmse)
         
         if RCFG.predict:
             
