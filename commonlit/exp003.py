@@ -377,19 +377,40 @@ class CustomTransformersModel(nn.Module):
         return self.classifier(torch.cat((outputs[1], additional_features)), 1)
     
 
-class CustomDataCollator(DataCollatorWithPadding):
-    def __init__(self, tokenizer):
-        super().__init__(tokenizer)
+# class CustomDataCollator(DataCollatorWithPadding):
+#     def __init__(self, tokenizer):
+#         super().__init__(tokenizer)
     
+#     def __call__(self, batch):
+#         # テキストデータのパディング
+#         batch_to_pad = [{k: v for k, v in item.items() if k != "features"} for item in batch]
+#         batch_padded = super().__call__(batch_to_pad)
+        
+#         # 追加の特徴量の結合
+#         batch_padded["features"] = torch.stack([item["features"] for item in batch])
+        
+#         return batch_padded
+
+
+class CustomDataCollator:
+    def __init__(self, tokenizer):
+        self.tokenizer = tokenizer
+
     def __call__(self, batch):
         # テキストデータのパディング
-        batch_to_pad = [{k: v for k, v in item.items() if k != "features"} for item in batch]
-        batch_padded = super().__call__(batch_to_pad)
+        input_ids = [item["input_ids"] for item in batch]
+        attention_masks = [item["attention_mask"] for item in batch]
+        input_ids_padded = self.tokenizer.pad({"input_ids": input_ids}, return_tensors="pt")["input_ids"]
+        attention_masks_padded = self.tokenizer.pad({"attention_mask": attention_masks}, return_tensors="pt")["attention_mask"]
         
         # 追加の特徴量の結合
-        batch_padded["features"] = torch.stack([item["features"] for item in batch])
+        features = torch.stack([item["features"] for item in batch])
         
-        return batch_padded
+        return {
+            "input_ids": input_ids_padded,
+            "attention_mask": attention_masks_padded,
+            "features": features
+        }
 
 class ScoreRegressor:
     def __init__(
