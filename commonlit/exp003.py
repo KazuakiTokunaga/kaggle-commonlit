@@ -372,9 +372,9 @@ class CustomTransformersModel(nn.Module):
             nn.Linear(hidden_units, num_labels)
         )
 
-    def forward(self, input_ids, additional_features, attention_mask=None):
+    def forward(self, input_ids, features, attention_mask=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
-        return self.classifier(torch.cat((outputs[1], additional_features)), 1)
+        return self.classifier(torch.cat((outputs[1], features)), 1)
     
 
 
