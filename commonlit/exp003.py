@@ -571,11 +571,10 @@ class ScoreRegressor:
                ):
         """predict content score"""
         
-        sep = self.tokenizer.sep_token
         test_df[self.input_col] = test_df.apply(self.concatenate_with_sep_token, axis=1)
 
         test_df['features'] = test_df[self.additional_feature_cols].to_numpy().tolist()
-        test_df = test_df[[self.input_col] + ['features'] + self.target_cols]
+        test_df = test_df[[self.input_col] + ['features']]
 
         test_ = test_df[[self.input_col] + ['features']]
 
