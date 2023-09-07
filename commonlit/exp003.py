@@ -556,7 +556,7 @@ class ScoreRegressor:
 
         trainer.train()
         
-        custom_model.save_pretrained(self.model_dir)
+        torch.save(custom_model, self.model_dir)
         self.tokenizer.save_pretrained(self.model_dir)
 
         custom_model.cpu()
