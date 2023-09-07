@@ -49,6 +49,8 @@ class CFG:
     random_seed: int =42
     save_steps: int =100
     max_length: int =512
+    n_freeze: int=4
+    mean_pooling: bool=False
 
 class RCFG:
     debug: bool =True
@@ -377,11 +379,21 @@ class MCRMSELoss(nn.Module):
         return score
 
 class CustomTransformersModel(nn.Module):
-    def __init__(self, base_model, num_labels, additional_features_dim, hidden_units=200, dropout=0.2):
+    def __init__(
+            self, 
+            base_model, 
+            num_labels, 
+            additional_features_dim, 
+            n_freeze = 0, 
+            hidden_units=200, 
+            dropout=0.2,
+            mean_pooling=False
+        ):
         super(CustomTransformersModel, self).__init__()
         self.base_model = base_model
         self.additional_features_dim = additional_features_dim
 
+        self.mean_pooling=mean_pooling
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Sequential(
             nn.Dropout(dropout),
@@ -394,11 +406,31 @@ class CustomTransformersModel(nn.Module):
             nn.Linear(hidden_units, num_labels)
         )
 
+        # freezing embeddings layer
+        if n_freeze:
+            self.base_model.embeddings.requires_grad_(False)
+        
+            #freezing the initial N layers
+            for i in range(0, n_freeze, 1):
+                for n,p in self.base_model.encoder.layer[i].named_parameters():
+                    p.requires_grad = False
+
         self.creterion = MCRMSELoss()
 
     def forward(self, input_ids, features, attention_mask=None, labels=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
-        logits = self.classifier(torch.cat((outputs[0][:, 0, :], features), 1))
+
+        if self.mean_pooling:
+            # mean pooling
+            last_hidden_state = outputs[0]
+            input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+            sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
+            sum_mask = input_mask_expanded.sum(1)
+            sum_mask = torch.clamp(sum_mask, min=1e-9)
+            mean_embeddings = sum_embeddings / sum_mask
+            logits = self.classifier(torch.cat((mean_embeddings, features), 1))
+        else:
+            logits = self.classifier(torch.cat((outputs[0][:, 0, :], features), 1))
 
         if labels is not None:
             loss = self.creterion(logits, labels)
@@ -509,7 +541,9 @@ class ScoreRegressor:
         custom_model = CustomTransformersModel(
             model_content, 
             num_labels=2, 
-            additional_features_dim=len(self.additional_feature_cols)
+            additional_features_dim=len(self.additional_feature_cols),
+            n_freeze=CFG.n_freeze,
+            mean_pooling=CFG.mean_pooling
         )
 
         train_dataset = Dataset.from_pandas(train_df, preserve_index=False) 
