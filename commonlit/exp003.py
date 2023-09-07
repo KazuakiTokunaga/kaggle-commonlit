@@ -539,11 +539,6 @@ class ScoreRegressor:
             config=self.model_config
         )
 
-        if CFG.mean_pooling:
-            print('Use mean_pooling.')
-        if CFG.n_freeze:
-            print('Use freezing layers.')
-            
         custom_model = CustomTransformersModel(
             model_content, 
             num_labels=2, 
