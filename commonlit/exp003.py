@@ -353,6 +353,28 @@ def compt_score(content_true, content_pred, wording_true, wording_pred):
     
     return (content_score + wording_score)/2
 
+class RMSELoss(nn.Module):
+    def __init__(self, eps=1e-6):
+        super().__init__()
+        self.mse = nn.MSELoss()
+        self.eps = eps
+
+    def forward(self, yhat, y):
+        loss = torch.sqrt(self.mse(yhat, y) + self.eps)
+        return loss
+
+class MCRMSELoss(nn.Module):
+    def __init__(self, num_scored=2):
+        super().__init__()
+        self.rmse = RMSELoss()
+        self.num_scored = num_scored
+
+    def forward(self, yhat, y):
+        score = 0
+        for i in range(self.num_scored):
+            score += self.rmse(yhat[:, i], y[:, i]) / self.num_scored
+
+        return score
 
 class CustomTransformersModel(nn.Module):
     def __init__(self, base_model, num_labels, additional_features_dim, hidden_units=200, dropout=0.2):
@@ -372,10 +394,18 @@ class CustomTransformersModel(nn.Module):
             nn.Linear(hidden_units, num_labels)
         )
 
-    def forward(self, input_ids, features, attention_mask=None):
+        self.creterion = MCRMSELoss()
+
+    def forward(self, input_ids, features, attention_mask=None, labels=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
         print(outputs)
-        return self.classifier(torch.cat((outputs[0][:, 0, :], features), 1))
+        logits = self.classifier(torch.cat((outputs[0][:, 0, :], features), 1))
+
+        if labels is not None:
+            loss = self.creterion(logits, labels)
+            return {"loss": loss, "logits": logits}
+
+        return {"logits": logits}
     
 
 
