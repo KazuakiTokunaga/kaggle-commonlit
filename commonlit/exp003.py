@@ -888,7 +888,7 @@ class Runner():
                 self.logger.info(f"cv {target} rmse: {rmse}")
                 self.data_to_write.append(rmse)
                 rmses.append(rmse)
-            self.data_to_write.append(rmses.mean())
+            self.data_to_write.append(np.mean(rmses))
         
         if RCFG.predict:
             
