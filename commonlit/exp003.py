@@ -908,131 +908,18 @@ class Runner():
         
         if RCFG.train:
             self.train.to_csv(f'{RCFG.model_dir}/train_processed.csv', index=False)
-
-    def run_lgbm(self):
-
-        if not RCFG.train:
-            return None
         
-        drop_columns = ["fold", "student_id", "prompt_id", "text", "fixed_summary_text",
-                        "prompt_question", "prompt_title", 
-                        "prompt_text"
-                    ] + self.targets
-        
-        self.model_dict = {}
-
-        for target in self.targets:
-            self.logger.info(f'Start training LGBM model: {target}')
-
-            models = []
-            for fold in range(CFG.n_splits):
-
-                X_train_cv = self.train[self.train["fold"] != fold].drop(columns=drop_columns)
-                y_train_cv = self.train[self.train["fold"] != fold][target]
-
-                X_eval_cv = self.train[self.train["fold"] == fold].drop(columns=drop_columns)
-                y_eval_cv = self.train[self.train["fold"] == fold][target]
-
-                dtrain = lgb.Dataset(X_train_cv, label=y_train_cv)
-                dval = lgb.Dataset(X_eval_cv, label=y_eval_cv)
-
-                evaluation_results = {}
-                model = lgb.train(
-                    RCFG.lgbm_params,
-                    num_boost_round=10000,
-                        #categorical_feature = categorical_features,
-                    valid_names=['train', 'valid'],
-                    train_set=dtrain,
-                    valid_sets=dval,
-                    callbacks=[
-                        lgb.early_stopping(stopping_rounds=30, verbose=False),
-                        lgb.log_evaluation(-1),
-                        lgb.callback.record_evaluation(evaluation_results)
-                    ],
-                )
-                models.append(model)
-            
-            self.model_dict[target] = models
-
-        # cv
-        rmses = []
-
-        for target in self.targets:
-            models = self.model_dict[target]
-
-            preds = []
-            trues = []
-            
-            for fold, model in enumerate(models):
-                # ilocで取り出す行を指定
-                X_eval_cv = self.train[self.train["fold"] == fold].drop(columns=drop_columns)
-                y_eval_cv = self.train[self.train["fold"] == fold][target]
-
-                pred = model.predict(X_eval_cv)
-
-                trues.extend(y_eval_cv)
-                preds.extend(pred)
-                
-            rmse = np.sqrt(mean_squared_error(trues, preds))
-            self.logger.info(f"{target}_rmse : {rmse}")
-            self.data_to_write.append(rmse)
-            rmses = rmses + [rmse]
-
-        mcrmse = sum(rmses) / len(rmses)
-        self.logger.info(f"mcrmse : {mcrmse}")
-        self.data_to_write.append(mcrmse)
-
-
-        # delete old model files
-        model_dir = f'{RCFG.model_dir}/gbtmodel'
-        if os.path.exists(model_dir):
-            shutil.rmtree(model_dir)
-        os.makedirs(model_dir)
-
-        save_model_path = f'{model_dir}/model_dict.pkl'
-        self.logger.info(f'save LGBM model: {save_model_path}')
-        with open(save_model_path, 'wb') as f:
-            pickle.dump(self.model_dict, f)
-
 
     def create_prediction(self):
 
         if not RCFG.predict:
             return None
 
-        self.logger.info('Start creating submission data using LGBM.')
-        with open(f'{RCFG.model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
-            self.model_dict = pickle.load(f)
+        self.logger.info('Start creating submission data.')
+        df_output = self.test[["student_id", "content_multi_pred", "wording_multi_pred"]]
+        df_output = df_output.rename(columns={"content_multi_pred": "content", "wording_multi_pred": "wording"})
 
-        drop_columns = [
-                        #"fold", 
-                        "student_id", "prompt_id", "text",  "fixed_summary_text",
-                        "prompt_question", "prompt_title", 
-                        "prompt_text",
-                    ]
-
-        pred_dict = {}
-        for target in self.targets:
-            models = self.model_dict[target]
-            preds = []
-
-            for fold, model in enumerate(models):
-                # ilocで取り出す行を指定
-                X_eval_cv = self.test.drop(columns=drop_columns)
-
-                pred = model.predict(X_eval_cv)
-                preds.append(pred)
-            
-            pred_dict[target] = preds
-
-        for target in self.targets:
-            preds = pred_dict[target]
-            for i, pred in enumerate(preds):
-                self.test[f"{target}_pred_{i}"] = pred
-
-            self.test[target] = self.test[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
-
-        self.test[["student_id", "content", "wording"]].to_csv("submission.csv", index=False)
+        df_output.to_csv("submission.csv", index=False)
 
 
     def write_sheet(self, ):
