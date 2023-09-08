@@ -345,9 +345,9 @@ class Preprocessor:
         if mode == 'train':
             scaler = StandardScaler()
             input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
-            dump(scaler, open(f"{RCFG.base_model_dir}/scaler.pkl", "wb"))
+            dump(scaler, open(f"{RCFG.model_dir}/scaler.pkl", "wb"))
         else:
-            scaler = load(open(f"{RCFG.base_model_dir}/scaler.pkl", "rb"))
+            scaler = load(open(f"{RCFG.model_dir}/scaler.pkl", "rb"))
             input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
 
 
