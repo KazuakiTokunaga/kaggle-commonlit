@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import json
 import datetime
+from pickle import dump, load
 from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
 import transformers
 from transformers import AutoModel, AutoTokenizer, AutoConfig, AutoModelForSequenceClassification
@@ -340,14 +341,14 @@ class Preprocessor:
 
 
         df_features = input_df[RCFG.additional_features].copy()
-        columns_drop = df_features.columns[((df_features == np.inf).sum() > 0) | (df_features.isnull().sum() > 0)]
-        print("Remove df_features: ", columns_drop)
         
-        RCFG.additional_features = [f for f in RCFG.additional_features if f not in [columns_drop]]
-        df_features = df_features.drop(columns_drop, axis=1)
-        
-        scaler = StandardScaler()
-        input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
+        if mode == 'train':
+            scaler = StandardScaler()
+            input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
+            dump(scaler, open(f"{RCFG.base_model_dir}/scaler.pkl", "wb"))
+        else:
+            scaler = load(open(f"{RCFG.base_model_dir}/scaler.pkl", "rb"))
+            input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
 
 
         return input_df.drop(columns=["summary_tokens", "prompt_tokens"])
