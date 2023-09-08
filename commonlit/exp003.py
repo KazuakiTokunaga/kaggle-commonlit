@@ -55,6 +55,7 @@ class CFG:
     mean_pooling: bool=False
 
 class RCFG:
+    run_name: str = 'run'
     debug: bool =True
     debug_size: int =10
     train: bool = True
@@ -96,6 +97,7 @@ class RCFG:
         "quotes_count"
     ]
     report_to: str = "wandb" # none
+    on_kaggle: bool = True
 
 class Logger:
 
@@ -849,6 +851,25 @@ class Runner():
                 sheet_key = RCFG.sheet_key
             )
 
+        if RCFG.report_to == 'wandb':
+
+            if RCFG.on_kaggle:
+                from kaggle_secrets import UserSecretsClient
+                user_secrets = UserSecretsClient()
+                secret_value_0 = user_secrets.get_secret("wandb_api_key")
+            else:
+                secret_value_0 = RCFG.wandb_api_key
+            
+            import wandb
+            wandb.login(key=secret_value_0)
+            run = wandb.init(
+                project='commonlit', 
+                name=CFG.run_name,
+                config=class_vars_to_dict(CFG),
+                group=CFG.model_name,
+                job_type="train"
+            )
+
     def load_dataset(self):
 
         self.prompts_train = pd.read_csv(RCFG.data_dir + "prompts_train.csv")
@@ -967,6 +988,10 @@ class Runner():
         if RCFG.train:
             self.train.to_csv(f'{RCFG.model_dir}/train_processed.csv', index=False)
         
+        if RCFG.report_to == 'wandb':
+            
+            import wandb
+            wandb.finish()
 
     def create_prediction(self):
 
