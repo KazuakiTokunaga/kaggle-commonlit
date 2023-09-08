@@ -889,9 +889,11 @@ class Runner():
         
         if RCFG.use_aug_data:
             self.logger.info('Use augmented data.')
-            df_master = self.train[['student_id', 'prompt_id', 'prompt_title', 'prompt_question', 'content', 'wording', 'fold']]
+
+            df_master = self.train.copy().drop(['fixed_summary_text'], axis=1)
             self.augtrain = self.augtrain.merge(df_master, on="student_id", how="left")
             self.augtrain = self.augtrain[self.augtrain['prompt_id'].notnull()]
+            self.augtrain = self.augtrain[self.train.columns]
 
         input_cols = ["prompt_title", "prompt_question", "fixed_summary_text"]
 
