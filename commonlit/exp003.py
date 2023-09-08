@@ -583,7 +583,7 @@ class ScoreRegressor:
             per_device_eval_batch_size=8,
             num_train_epochs=num_train_epochs,
             weight_decay=weight_decay,
-            report_to='none',
+            report_to='wandb',
             greater_is_better=False,
             save_strategy="steps",
             evaluation_strategy="steps",
