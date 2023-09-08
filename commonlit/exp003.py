@@ -20,6 +20,7 @@ from datasets import Dataset,load_dataset, load_from_disk
 from transformers import TrainingArguments, Trainer
 from datasets import load_metric, disable_progress_bar
 from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import StandardScaler
 import torch
 import torch.nn as nn
 from sklearn.model_selection import KFold, GroupKFold
@@ -81,6 +82,18 @@ class RCFG:
         'lambda_l1': 0.0,
         'lambda_l2': 0.011
      }
+    additional_features = [
+        "summary_length", 
+        "splling_err_num", 
+        "prompt_length",
+        "length_ratio",
+        "word_overlap_count",
+        "bigram_overlap_count",
+        "bigram_overlap_ratio",
+        "trigram_overlap_count",
+        "trigram_overlap_ratio",
+        "quotes_count"
+    ]
 
 class Logger:
 
@@ -324,7 +337,19 @@ class Preprocessor:
 #         input_df = pd.concat([input_df, ners_count_df], axis=1)
         
         input_df['quotes_count'] = input_df.progress_apply(self.quotes_count, axis=1)
+
+
+        df_features = input_df[RCFG.additional_features].copy()
+        columns_drop = df_features.columns[((df_features == np.inf).sum() > 0) | (df_features.isnull().sum() > 0)]
+        print("Remove df_features: ", columns_drop)
         
+        RCFG.additional_features = [f for f in RCFG.additional_features if f not in [columns_drop]]
+        df_features = df_features.drop(columns_drop, axis=1)
+        
+        scaler = StandardScaler()
+        input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
+
+
         return input_df.drop(columns=["summary_tokens", "prompt_tokens"])
 
 
@@ -456,18 +481,7 @@ class ScoreRegressor:
         self.input_col = "input"        
         self.input_text_cols = inputs 
         self.target_cols = target_cols
-        self.additional_feature_cols = [
-            "summary_length", 
-            "splling_err_num", 
-            "prompt_length",
-            "length_ratio",
-            "word_overlap_count",
-            "bigram_overlap_count",
-            "bigram_overlap_ratio",
-            "trigram_overlap_count",
-            "trigram_overlap_ratio",
-            "quotes_count"
-        ]
+        self.additional_feature_cols = RCFG.additional_features
 
         self.model_name = model_name
         self.model_dir = model_dir
