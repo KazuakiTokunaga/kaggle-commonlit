@@ -95,6 +95,7 @@ class RCFG:
         "trigram_overlap_ratio",
         "quotes_count"
     ]
+    report_to: str = "wandb" # none
 
 class Logger:
 
@@ -583,7 +584,7 @@ class ScoreRegressor:
             per_device_eval_batch_size=8,
             num_train_epochs=num_train_epochs,
             weight_decay=weight_decay,
-            report_to='wandb',
+            report_to=RCFG.report_to,
             greater_is_better=False,
             save_strategy="steps",
             evaluation_strategy="steps",
