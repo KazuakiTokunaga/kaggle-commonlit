@@ -579,7 +579,7 @@ class ScoreRegressor:
             output_dir=model_fold_dir,
             load_best_model_at_end=True, # select best model
             learning_rate=learning_rate,
-            warmup_step_ratio=0.1,
+            warmup_ratio=0.1,
             per_gpu_train_batch_size=batch_size,
             # gradient_accumulation_steps=4,
             # per_device_train_batch_size=3, # batch_sizeは12 = 3 * 4
