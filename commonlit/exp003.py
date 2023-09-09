@@ -49,7 +49,7 @@ class CFG:
     n_splits: int =4
     batch_size: int =16
     random_seed: int =42
-    save_steps: int =100
+    save_steps: int =50
     max_length: int =512
     n_freeze: int=6
     mean_pooling: bool=False
