@@ -34,6 +34,7 @@ class RCFG:
     device: str = "cpu" # cuda
     save_path: str = "."
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
+    x_file_path: str = '/kaggle/commonlit/aug-data/translate_wmt21.csv'
     translation_models = [
         ["Helsinki-NLP/opus-mt-en-fr", "Helsinki-NLP/opus-mt-fr-en"],
         ["Helsinki-NLP/opus-mt-en-zh", "Helsinki-NLP/opus-mt-zh-en"],
@@ -219,7 +220,7 @@ class Runner():
     
     def translate_wmt21_to_en(self):
 
-        df = pd.load_csv('/kaggle/commonlit/aug-data/translate_wmt21.csv')
+        df = pd.load_csv(RCFG.x_file_path)
 
         def translate_lang(x, lang="de"):
             tokenizer.src_lang = lang

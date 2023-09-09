@@ -74,6 +74,7 @@ class RCFG:
     sheet_json_key: str = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
     kaggle_dataset_title: str = "commonlit-models"
+    input_cols: List[str] = ["prompt_title", "prompt_question", "fixed_summary_text"]
     lgbm_params = {
         'boosting_type': 'gbdt',
         'random_state': 42,
@@ -918,7 +919,7 @@ class Runner():
             self.augtrain = self.augtrain[self.augtrain['prompt_id'].notnull()]
             self.augtrain = self.augtrain[self.train.columns]
 
-        input_cols = ["prompt_title", "prompt_question", "fixed_summary_text"]
+        input_cols = RCFG.input_cols
 
         if RCFG.train:
             
