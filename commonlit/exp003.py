@@ -41,11 +41,11 @@ import lightgbm as lgb
 
 class CFG:
     model_name: str ="debertav3base"
-    learning_rate: float =0.000016
+    learning_rate: float =3e-5
     weight_decay: float =0.03
     hidden_dropout_prob: float =0.007
     attention_probs_dropout_prob: float =0.007
-    num_train_epochs: int =5
+    num_train_epochs: int =6
     n_splits: int =4
     batch_size: int =16
     random_seed: int =42
@@ -580,6 +580,7 @@ class ScoreRegressor:
             load_best_model_at_end=True, # select best model
             learning_rate=learning_rate,
             warmup_ratio=0.1,
+            dataloader_drop_last = True,
             per_gpu_train_batch_size=batch_size,
             # gradient_accumulation_steps=4,
             # per_device_train_batch_size=3, # batch_sizeは12 = 3 * 4
