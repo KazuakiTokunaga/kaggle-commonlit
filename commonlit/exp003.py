@@ -580,7 +580,7 @@ class ScoreRegressor:
             load_best_model_at_end=True, # select best model
             learning_rate=learning_rate,
             warmup_ratio=0.1,
-            dataloader_drop_last = True,
+            dataloader_drop_last = True if not RCFG.debug else False,
             per_gpu_train_batch_size=batch_size,
             # gradient_accumulation_steps=4,
             # per_device_train_batch_size=3, # batch_sizeは12 = 3 * 4
