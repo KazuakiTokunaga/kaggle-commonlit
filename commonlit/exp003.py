@@ -51,7 +51,7 @@ class CFG:
     random_seed: int =42
     save_steps: int =50
     max_length: int =512
-    n_freeze: int=6
+    n_freeze: int=4
     mean_pooling: bool=False
 
 class RCFG:
