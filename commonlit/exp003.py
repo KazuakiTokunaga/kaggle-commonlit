@@ -864,7 +864,7 @@ class Runner():
             wandb.login(key=secret_value_0)
             run = wandb.init(
                 project='commonlit', 
-                name=CFG.run_name,
+                name=RCFG.run_name,
                 config=class_vars_to_dict(CFG),
                 group=CFG.model_name,
                 job_type="train"
