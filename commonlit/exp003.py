@@ -47,11 +47,11 @@ class CFG:
     attention_probs_dropout_prob: float =0.007
     num_train_epochs: int =5
     n_splits: int =4
-    batch_size: int =12
+    batch_size: int =16
     random_seed: int =42
     save_steps: int =100
     max_length: int =512
-    n_freeze: int=4
+    n_freeze: int=6
     mean_pooling: bool=False
 
 class RCFG:
@@ -430,6 +430,7 @@ class CustomTransformersModel(nn.Module):
                 base_model.config.hidden_size + additional_features_dim, 
                 hidden_units,
             ),
+            nn.BatchNorm1d(hidden_units),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
             nn.Linear(hidden_units, num_labels)
@@ -578,8 +579,7 @@ class ScoreRegressor:
             output_dir=model_fold_dir,
             load_best_model_at_end=True, # select best model
             learning_rate=learning_rate,
-            lr_scheduler_type="cosine",
-            warmup_ratio=0.1,
+            warmup_step_ratio=0.1,
             per_gpu_train_batch_size=batch_size,
             # gradient_accumulation_steps=4,
             # per_device_train_batch_size=3, # batch_sizeは12 = 3 * 4
