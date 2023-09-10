@@ -313,12 +313,12 @@ class Preprocessor:
     def add_all_words(self, series):
 
         prompt_words = Counter()
-        for tokens in series:
+        for tokens in series.drop_duplicates():
             prompt_words.update(tokens)
-        prompt_words_in_order = [item[0] for item in prompt_words.most_common()] 
+        self.prompt_words_in_order = [item[0] for item in prompt_words.most_common()] 
 
         self.all_words_rank = {}
-        for i,word in enumerate(prompt_words_in_order + self.gensim_words):
+        for i,word in enumerate(self.prompt_words_in_order + self.gensim_words):
             self.all_words_rank[word] = i
     
     def run(self, 
