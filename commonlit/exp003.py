@@ -389,8 +389,7 @@ class Preprocessor:
             input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
 
 
-        # return input_df.drop(columns=["summary_tokens", "prompt_tokens"])
-        return input_df
+        return input_df.drop(columns=["summary_tokens", "prompt_tokens"])
 
 
 def compute_metrics(eval_pred):
