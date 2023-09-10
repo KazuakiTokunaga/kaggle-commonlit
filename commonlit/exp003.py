@@ -377,7 +377,6 @@ class Preprocessor:
         
         input_df['quotes_count'] = input_df.progress_apply(self.quotes_count, axis=1)
 
-
         df_features = input_df[RCFG.additional_features].copy()
         
         if mode == 'train':
