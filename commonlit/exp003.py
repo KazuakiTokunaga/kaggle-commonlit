@@ -198,7 +198,7 @@ class Preprocessor:
         "Probability of `word`."
         # use inverse of rank as proxy
         # returns 0 if the word isn't in the dictionary
-        return - self.all_words_rank.get(self, word, 0)
+        return - self.all_words_rank.get(word, 0)
 
     def correction(self, word): 
         "Most probable spelling correction for word."
