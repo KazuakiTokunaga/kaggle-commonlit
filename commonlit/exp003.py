@@ -936,6 +936,8 @@ class Runner():
         if RCFG.predict:
             self.logger.info('Preprocess test data.')
             self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
+        
+        return preprocessor
 
 
     def run_transformers_regressor(self):
