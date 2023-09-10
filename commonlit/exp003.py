@@ -466,7 +466,6 @@ class CustomTransformersModel(nn.Module):
                 base_model.config.hidden_size + additional_features_dim, 
                 hidden_units,
             ),
-            nn.BatchNorm1d(hidden_units),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
             nn.Linear(hidden_units, num_labels)
@@ -615,8 +614,6 @@ class ScoreRegressor:
             output_dir=model_fold_dir,
             load_best_model_at_end=True, # select best model
             learning_rate=learning_rate,
-            warmup_ratio=0.1,
-            dataloader_drop_last = True if not RCFG.debug else False,
             per_gpu_train_batch_size=batch_size,
             # gradient_accumulation_steps=4,
             # per_device_train_batch_size=3, # batch_sizeは12 = 3 * 4
@@ -938,8 +935,6 @@ class Runner():
         if RCFG.predict:
             self.logger.info('Preprocess test data.')
             self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
-        
-        return preprocessor
 
 
     def run_transformers_regressor(self):
