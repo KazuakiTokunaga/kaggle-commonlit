@@ -319,6 +319,8 @@ class Preprocessor:
 
         self.all_words_rank = {}
         for i,word in enumerate(self.prompt_words_in_order + self.gensim_words):
+            if word in self.all_words_rank:
+                continue
             self.all_words_rank[word] = i
     
     def run(self, 
