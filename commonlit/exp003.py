@@ -67,7 +67,7 @@ class RCFG:
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     use_aug_data: bool = False
     aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
-    gensim_model_bin_path: str = "/kaggle/input/googlenewsvectorsnegative300/GoogleNews-vectors-negative300.bin"
+    gensim_bin_model_path: str = "/kaggle/input/googlenewsvectorsnegative300/GoogleNews-vectors-negative300.bin"
     aug_data_list: [
         "back_translation_Hel_fr"
     ]
