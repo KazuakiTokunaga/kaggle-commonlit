@@ -926,7 +926,7 @@ class Runner():
 
     def preprocess(self):
 
-        self.logger.into('Start Preprocess.')
+        self.logger.info('Start Preprocess.')
         preprocessor = Preprocessor(model_name=CFG.model_name)
 
         if RCFG.train:
