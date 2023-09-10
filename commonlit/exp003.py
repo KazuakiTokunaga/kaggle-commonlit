@@ -34,8 +34,8 @@ from nltk.tokenize import word_tokenize
 from nltk.tokenize.treebank import TreebankWordDetokenizer
 from collections import Counter
 import spacy
+import gensim
 import re
-from autocorrect import Speller
 from spellchecker import SpellChecker
 import lightgbm as lgb
 
@@ -67,6 +67,7 @@ class RCFG:
     data_dir: str = "/kaggle/input/commonlit-evaluate-student-summaries/"
     use_aug_data: bool = False
     aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
+    gensim_model_bin_path: str = "/kaggle/input/googlenewsvectorsnegative300/GoogleNews-vectors-negative300.bin"
     aug_data_list: [
         "back_translation_Hel_fr"
     ]
@@ -188,8 +189,45 @@ class Preprocessor:
         self.STOP_WORDS = set(stopwords.words('english'))
         
         self.spacy_ner_model = spacy.load('en_core_web_sm',)
-        self.speller = Speller(lang='en')
         self.spellchecker = SpellChecker() 
+
+        gensim_model = gensim.models.KeyedVectors.load_word2vec_format(RCFG.gensim_bin_model_path, binary=True)
+        self.gensim_words = gensim_model.index_to_key
+
+    def get_probability(self, word): 
+        "Probability of `word`."
+        # use inverse of rank as proxy
+        # returns 0 if the word isn't in the dictionary
+        return - self.all_words_rank.get(self, word, 0)
+
+    def correction(self, word): 
+        "Most probable spelling correction for word."
+        return max(self.get_candidates(word), key=self.get_probability)
+
+    def get_candidates(self, word): 
+        "Generate possible spelling corrections for word."
+        return (self.is_known([word]) or self.is_known(self.edits1(word)) or self.is_known(self.edits2(word)) or [word])
+
+    def is_known(self, words): 
+        "The subset of `words` that appear in the dictionary of all_words_rank."
+        return set(w for w in words if w in self.all_words_rank)
+
+    def edits1(self, word):
+        "All edits that are one edit away from `word`."
+        letters    = 'abcdefghijklmnopqrstuvwxyz'
+        splits     = [(word[:i], word[i:])    for i in range(len(word) + 1)]
+        deletes    = [L + R[1:]               for L, R in splits if R]
+        transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
+        replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
+        inserts    = [L + c + R               for L, R in splits for c in letters]
+        return set(deletes + transposes + replaces + inserts)
+
+    def edits2(self, word): 
+        "All edits that are two edits away from `word`."
+        return (e2 for e1 in self.edits1(word) for e2 in self.edits1(e1))
+    
+    def fix_text(self, x):
+        return self.twd.detokenize([self.correction(w) for w in x])
         
     def word_overlap_count(self, row):
         """ intersection(prompt_text, text) """        
@@ -276,7 +314,17 @@ class Preprocessor:
     def add_spelling_dictionary(self, tokens: List[str]) -> List[str]:
         """dictionary update for pyspell checker and autocorrect"""
         self.spellchecker.word_frequency.load_words(tokens)
-        self.speller.nlp_data.update({token:1000 for token in tokens})
+    
+    def add_all_words(self, series):
+
+        prompt_words = Counter()
+        for tokens in series:
+            prompt_words.update(tokens)
+        prompt_words_in_order = [item[0] for item in prompt_words.most_common()] 
+
+        self.all_words_rank = {}
+        for i,word in enumerate(prompt_words_in_order + self.gensim_words):
+            self.all_words_rank[word] = i
     
     def run(self, 
             prompts: pd.DataFrame,
@@ -303,11 +351,11 @@ class Preprocessor:
         prompts["prompt_tokens"].apply(
             lambda x: self.add_spelling_dictionary(x)
         )
+        self.add_all_words(prompts['prompt_tokens'])
         
-#         from IPython.core.debugger import Pdb; Pdb().set_trace()
         # fix misspelling
-        summaries["fixed_summary_text"] = summaries["text"].progress_apply(
-            lambda x: self.speller(x)
+        summaries["fixed_summary_text"] = summaries["summary_token"].progress_apply(
+            lambda x: self.fix_text(x)
         )
         
         # count misspelling
