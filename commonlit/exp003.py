@@ -259,11 +259,6 @@ class Preprocessor:
         # Calculate the number of common n-grams
         common_ngrams = original_ngrams.intersection(summary_ngrams)
 
-        # # Optionally, you can get the frequency of common n-grams for a more nuanced analysis
-        # original_ngram_freq = Counter(ngrams(original_words, n))
-        # summary_ngram_freq = Counter(ngrams(summary_words, n))
-        # common_ngram_freq = {ngram: min(original_ngram_freq[ngram], summary_ngram_freq[ngram]) for ngram in common_ngrams}
-
         return len(common_ngrams)
     
     def ner_overlap_count(self, row, mode:str):
@@ -354,7 +349,7 @@ class Preprocessor:
         self.add_all_words(prompts['prompt_tokens'])
         
         # fix misspelling
-        summaries["fixed_summary_text"] = summaries["summary_token"].progress_apply(
+        summaries["fixed_summary_text"] = summaries["summary_tokens"].progress_apply(
             lambda x: self.fix_text(x)
         )
         
@@ -377,17 +372,6 @@ class Preprocessor:
             self.ngram_co_occurrence, args=(3,), axis=1
         )
         input_df['trigram_overlap_ratio'] = input_df['trigram_overlap_count'] / (input_df['summary_length'] - 2)
-        
-        # Crate dataframe with count of each category NERs overlap for all the summaries
-        # Because it spends too much time for this feature, I don't use this time.
-#         ners_count_df  = input_df.progress_apply(
-#             lambda row: pd.Series(self.ner_overlap_count(row, mode=mode), dtype='float64'), axis=1
-#         ).fillna(0)
-#         self.ner_keys = ners_count_df.columns
-#         ners_count_df['sum'] = ners_count_df.sum(axis=1)
-#         ners_count_df.columns = ['NER_' + col for col in ners_count_df.columns]
-#         # join ner count dataframe with train dataframe
-#         input_df = pd.concat([input_df, ners_count_df], axis=1)
         
         input_df['quotes_count'] = input_df.progress_apply(self.quotes_count, axis=1)
 
@@ -942,6 +926,7 @@ class Runner():
 
     def preprocess(self):
 
+        self.logger.into('Start Preprocess.')
         preprocessor = Preprocessor(model_name=CFG.model_name)
 
         if RCFG.train:
