@@ -41,13 +41,13 @@ import lightgbm as lgb
 
 class CFG:
     model_name: str ="debertav3base"
-    learning_rate: float =3e-5
+    learning_rate: float =1.5e-5
     weight_decay: float =0.03
     hidden_dropout_prob: float =0.007
     attention_probs_dropout_prob: float =0.007
-    num_train_epochs: int =6
+    num_train_epochs: int =5
     n_splits: int =4
-    batch_size: int =16
+    batch_size: int =12
     random_seed: int =42
     save_steps: int =50
     max_length: int =512
@@ -355,7 +355,8 @@ class Preprocessor:
             input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
 
 
-        return input_df.drop(columns=["summary_tokens", "prompt_tokens"])
+        # return input_df.drop(columns=["summary_tokens", "prompt_tokens"])
+        return input_df
 
 
 def compute_metrics(eval_pred):
