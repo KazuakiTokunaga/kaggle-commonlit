@@ -938,9 +938,11 @@ class Runner():
     def preprocess(self):
 
         if RCFG.use_preprocessed_dataset:
+            self.logger.info(f'Use exsisting files.')
             nrows = RCFG.debug_size if RCFG.debug else None
             self.train = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_train_data_file}", nrows=nrows)
             self.test = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_test_data_file}")
+            return None
 
         self.logger.info('Start Preprocess.')
         preprocessor = Preprocessor(model_name=CFG.model_name)
