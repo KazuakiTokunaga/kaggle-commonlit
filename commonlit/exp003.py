@@ -796,7 +796,7 @@ def validate(
     columns = list(train_df.columns.values)
     
     for fold in range(CFG.n_splits):
-        print(f"fold {fold}:")
+        logger.info(f"fold {fold}:")
         
         valid_data = train_df[train_df["fold"] == fold]
         
@@ -1021,7 +1021,6 @@ class Runner():
             rmses = []
             for target in self.targets:
                 rmse = mean_squared_error(self.train[target], self.train[f"{target}_pred"], squared=False)
-                print(f"cv {target} rmse: {rmse}")
                 self.logger.info(f"cv {target} rmse: {rmse}")
                 self.data_to_write.append(rmse)
                 rmses.append(rmse)
