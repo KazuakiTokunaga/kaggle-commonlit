@@ -999,7 +999,8 @@ class Runner():
                 df_augtrain = self.augtrain
             )
             
-            print_gpu_utilization(self.logger) # 7117, 6739 (1719, 1719)
+            print(self.train.columns)
+            print_gpu_utilization(self.logger) 
             self.logger.info(f'Start creating oof prediction.')
             self.train = validate(
                 logger=self.logger,
