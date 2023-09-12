@@ -53,6 +53,7 @@ class CFG:
     max_length: int =512
     n_freeze: int=4
     mean_pooling: bool=False
+    additional_features: bool=True
 
 class RCFG:
     run_name: str = 'run'
@@ -100,6 +101,11 @@ class RCFG:
     ]
     report_to: str = "wandb" # none
     on_kaggle: bool = True
+    use_preprocessed_dataset: bool = True
+    preprocessed_dataset_path: str = ""
+    use_train_data_file: str = "train_preprocessed.csv"
+    use_test_data_file: str = "test_preprocessed.csv"
+    use_lgbm: bool = False
 
 class Logger:
 
@@ -396,6 +402,7 @@ def compute_metrics(eval_pred):
     rmse = mean_squared_error(labels, predictions, squared=False)
     return {"rmse": rmse}
 
+
 def compute_mcrmse(eval_pred):
     """
     Calculates mean columnwise root mean squared error
@@ -417,6 +424,7 @@ def compt_score(content_true, content_pred, wording_true, wording_pred):
     wording_score = mean_squared_error(wording_true, wording_pred)**(1/2)
     
     return (content_score + wording_score)/2
+
 
 class RMSELoss(nn.Module):
     def __init__(self, eps=1e-6):
@@ -449,25 +457,26 @@ class CustomTransformersModel(nn.Module):
             additional_features_dim, 
             n_freeze = 0, 
             hidden_units=200, 
-            dropout=0.2,
-            mean_pooling=False
+            dropout=0.2
         ):
         super(CustomTransformersModel, self).__init__()
         self.base_model = base_model
         self.additional_features_dim = additional_features_dim
-
-        self.mean_pooling=mean_pooling
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(
-            nn.Dropout(dropout),
-            nn.Linear(
-                base_model.config.hidden_size + additional_features_dim, 
-                hidden_units,
-            ),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_units, num_labels)
-        )
+
+        if CFG.additional_features:
+            self.classifier = nn.Sequential(
+                nn.Dropout(dropout),
+                nn.Linear(
+                    base_model.config.hidden_size + additional_features_dim, 
+                    hidden_units,
+                ),
+                nn.ReLU(inplace=True),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_units, num_labels)
+            )
+        else:
+            self.classifier = nn.Linear(base_model.config.hidden_size, 2)
 
         # freezing embeddings layer
         if n_freeze:
@@ -483,17 +492,22 @@ class CustomTransformersModel(nn.Module):
     def forward(self, input_ids, features, attention_mask=None, labels=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
 
-        if self.mean_pooling:
+        if CFG.mean_pooling:
             # mean pooling
             last_hidden_state = outputs[0]
             input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
             sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
             sum_mask = input_mask_expanded.sum(1)
             sum_mask = torch.clamp(sum_mask, min=1e-9)
-            mean_embeddings = sum_embeddings / sum_mask
-            logits = self.classifier(torch.cat((mean_embeddings, features), 1))
+            base_model_output = sum_embeddings / sum_mask
         else:
-            logits = self.classifier(torch.cat((outputs[0][:, 0, :], features), 1))
+            # use CLS token
+            base_model_output = outputs[0][:, 0, :]
+        
+        if CFG.additional_features:
+            logits = self.classifier(torch.cat((base_model_output, features), 1))
+        else:
+            logits = self.classifier(base_model_output)
 
         if labels is not None:
             loss = self.creterion(logits, labels)
@@ -805,10 +819,10 @@ def validate(
             fold=fold
         )
 
-        train_df.loc[valid_data.index, f"content_multi_pred"] = pred_df[f"content_pred"].values
-        train_df.loc[valid_data.index, f"wording_multi_pred"] = pred_df[f"wording_pred"].values
+        train_df.loc[valid_data.index, f"content_pred"] = pred_df[f"content_pred"].values
+        train_df.loc[valid_data.index, f"wording_pred"] = pred_df[f"wording_pred"].values
                 
-    return train_df[columns + [f"content_multi_pred", f"wording_multi_pred"]]
+    return train_df[columns + [f"content_pred", f"wording_pred"]]
 
 def predict(
     logger,
@@ -847,13 +861,13 @@ def predict(
             fold=fold
         )
 
-        test_df[f"content_multi_pred_{fold}"] = pred_df[f"content_pred"].values
-        test_df[f"wording_multi_pred_{fold}"] = pred_df[f"wording_pred"].values
+        test_df[f"content_pred_{fold}"] = pred_df[f"content_pred"].values
+        test_df[f"wording_pred_{fold}"] = pred_df[f"wording_pred"].values
 
-    test_df[f"content_multi_pred"] = test_df[[f"content_multi_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
-    test_df[f"wording_multi_pred"] = test_df[[f"wording_multi_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+    test_df[f"content_pred"] = test_df[[f"content_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+    test_df[f"wording_pred"] = test_df[[f"wording_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
     
-    return test_df[columns + [f"content_multi_pred", f"wording_multi_pred"]]
+    return test_df[columns + [f"content_pred", f"wording_pred"]]
 
 
 class Runner():
@@ -873,6 +887,7 @@ class Runner():
 
         self.targets = ["content", "wording"]
         self.logger = Logger(RCFG.output_path)
+        self.lgbm_columns = RCFG.additional_features + ["content_pred", "wording_pred"]
 
         self.data_to_write = []
 
@@ -922,6 +937,10 @@ class Runner():
             self.augtrain.columns = ['student_id', 'fixed_summary_text']
 
     def preprocess(self):
+
+        if RCFG.use_preprocessed_dataset:
+            self.train = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_train_data_file}")
+            self.test = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_test_data_file}")
 
         self.logger.info('Start Preprocess.')
         preprocessor = Preprocessor(model_name=CFG.model_name)
@@ -1019,23 +1038,134 @@ class Runner():
             print_gpu_utilization(self.logger) # 7117, 7115 (6137, 6137)
         
         if RCFG.train:
-            self.train.to_csv(f'{RCFG.model_dir}/train_processed.csv', index=False)
+            self.train.to_csv(f'{RCFG.model_dir}/train_processed_pred_{RCFG.commit_hash}.csv', index=False)
         
         if RCFG.report_to == 'wandb':
             
             import wandb
             wandb.finish()
 
-    def create_prediction(self):
+    def run_lgbm(self):
+
+        if not RCFG.train:
+            return None
+        
+        self.model_dict = {}
+
+        for target in self.targets:
+            self.logger.info(f'Start training LGBM model: {target}')
+
+            models = []
+            for fold in range(CFG.n_splits):
+
+                X_train_cv = self.train[self.train["fold"] != fold][self.lgbm_columns]
+                y_train_cv = self.train[self.train["fold"] != fold][target]
+
+                X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
+                y_eval_cv = self.train[self.train["fold"] == fold][target]
+
+                dtrain = lgb.Dataset(X_train_cv, label=y_train_cv)
+                dval = lgb.Dataset(X_eval_cv, label=y_eval_cv)
+
+                evaluation_results = {}
+                model = lgb.train(
+                    RCFG.lgbm_params,
+                    num_boost_round=10000,
+                    valid_names=['train', 'valid'],
+                    train_set=dtrain,
+                    valid_sets=dval,
+                    callbacks=[
+                        lgb.early_stopping(stopping_rounds=30, verbose=False),
+                        lgb.log_evaluation(-1),
+                        lgb.callback.record_evaluation(evaluation_results)
+                    ],
+                )
+                models.append(model)
+            
+            self.model_dict[target] = models
+
+        # cv
+        rmses = []
+
+        for target in self.targets:
+            models = self.model_dict[target]
+
+            preds = []
+            trues = []
+            
+            for fold, model in enumerate(models):
+                # ilocで取り出す行を指定
+                X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
+                y_eval_cv = self.train[self.train["fold"] == fold][target]
+
+                pred = model.predict(X_eval_cv)
+
+                trues.extend(y_eval_cv)
+                preds.extend(pred)
+                
+            rmse = np.sqrt(mean_squared_error(trues, preds))
+            self.logger.info(f"{target}_rmse : {rmse}")
+            self.data_to_write.append(rmse)
+            rmses = rmses + [rmse]
+
+        mcrmse = sum(rmses) / len(rmses)
+        self.logger.info(f"mcrmse : {mcrmse}")
+        self.data_to_write.append(mcrmse)
+
+
+        # delete old model files
+        model_dir = f'{RCFG.model_dir}/gbtmodel'
+        if os.path.exists(model_dir):
+            shutil.rmtree(model_dir)
+        os.makedirs(model_dir)
+
+        save_model_path = f'{model_dir}/model_dict.pkl'
+        self.logger.info(f'save LGBM model: {save_model_path}')
+        with open(save_model_path, 'wb') as f:
+            pickle.dump(self.model_dict, f)
+
+
+    def create_prediction(self, filename="submission.csv"):
 
         if not RCFG.predict:
             return None
+        
+        if not RCFG.use_lgbm:
+        
+            self.logger.info('Start creating submission data without LGBM.')
+            df_output = self.test[["student_id", "content_pred", "wording_pred"]]
+            df_output = df_output.rename(columns={"content_pred": "content", "wording_pred": "wording"})
 
-        self.logger.info('Start creating submission data.')
-        df_output = self.test[["student_id", "content_multi_pred", "wording_multi_pred"]]
-        df_output = df_output.rename(columns={"content_multi_pred": "content", "wording_multi_pred": "wording"})
+            df_output.to_csv("submission.csv", index=False)
+            return None
 
-        df_output.to_csv("submission.csv", index=False)
+
+        self.logger.info('Start creating submission data using LGBM.')
+        with open(f'{RCFG.model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
+            self.model_dict = pickle.load(f)
+
+        pred_dict = {}
+        for target in self.targets:
+            models = self.model_dict[target]
+            preds = []
+
+            for fold, model in enumerate(models):
+                # ilocで取り出す行を指定
+                X_eval_cv = self.test[self.lgbm_columns]
+
+                pred = model.predict(X_eval_cv)
+                preds.append(pred)
+            
+            pred_dict[target] = preds
+
+        for target in self.targets:
+            preds = pred_dict[target]
+            for i, pred in enumerate(preds):
+                self.test[f"{target}_pred_{i}"] = pred
+
+            self.test[target] = self.test[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+
+        self.test[["student_id", "content", "wording"]].to_csv(filename, index=False)
 
 
     def write_sheet(self, ):
