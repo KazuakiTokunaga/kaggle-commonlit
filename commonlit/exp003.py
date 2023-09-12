@@ -57,11 +57,11 @@ class CFG:
 
 class RCFG:
     run_name: str = 'run'
+    commit_hash: str =""
     debug: bool =True
     debug_size: int =10
     train: bool = True
     predict: bool = True
-    commit_hash: str =""
     base_model_dir: str = "/kaggle/input/debertav3base"
     output_path: str = ""
     model_dir: str = "." # "/kaggle/commonlit-models"
@@ -82,7 +82,7 @@ class RCFG:
         'random_state': 42,
         'objective': 'regression',
         'metric': 'rmse',
-        'learning_rate': 0.048,
+        'learning_rate': 0.02,
         'max_depth': 4,
         'lambda_l1': 0.0,
         'lambda_l2': 0.011
@@ -168,9 +168,9 @@ def class_vars_to_dict(cls):
 
 
 def print_gpu_utilization(logger):
-    nvmlInit()  #noqa
-    handle = nvmlDeviceGetHandleByIndex(0) # noqa
-    info = nvmlDeviceGetMemoryInfo(handle) # noqa
+    nvmlInit()
+    handle = nvmlDeviceGetHandleByIndex(0)
+    info = nvmlDeviceGetMemoryInfo(handle)
     logger.info(f"GPU memory occupied: {info.used//1024**2} MB.")
 
 
@@ -776,8 +776,6 @@ def train_by_fold(
             save_steps=save_steps,
         )
 
-        del csr
-        torch.cuda.empty_cache()
         print_gpu_utilization(logger)
 
 def validate(
@@ -1028,7 +1026,7 @@ class Runner():
         
         if RCFG.predict:
             
-            print_gpu_utilization(self.logger) # 7117, 6739 (3907, 3907)
+            print_gpu_utilization(self.logger)
             self.logger.info(f'Start Predicting.')
             self.test = predict(
                 logger=self.logger,
@@ -1043,7 +1041,7 @@ class Runner():
             )
 
 
-            print_gpu_utilization(self.logger) # 7117, 7115 (6137, 6137)
+            print_gpu_utilization(self.logger)
         
         if RCFG.train:
             self.train.to_csv(f'{RCFG.model_dir}/train_processed_pred_{RCFG.commit_hash}.csv', index=False)
