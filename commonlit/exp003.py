@@ -609,8 +609,7 @@ class ScoreRegressor:
             model_content, 
             num_labels=2, 
             additional_features_dim=len(self.additional_feature_cols),
-            n_freeze=CFG.n_freeze,
-            mean_pooling=CFG.mean_pooling
+            n_freeze=CFG.n_freeze
         )
 
         train_dataset = Dataset.from_pandas(train_df, preserve_index=False) 
