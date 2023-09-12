@@ -821,7 +821,11 @@ def validate(
         train_df.loc[valid_data.index, f"content_pred"] = pred_df[f"content_pred"].values
         train_df.loc[valid_data.index, f"wording_pred"] = pred_df[f"wording_pred"].values
                 
-    return train_df[columns + [f"content_pred", f"wording_pred"]]
+    for target_pred in ["content_pred", "wording_pred"]:
+        if target_pred not in columns: columns.append(target_pred)
+    
+    return train_df[columns]
+
 
 def predict(
     logger,
