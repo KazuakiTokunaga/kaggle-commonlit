@@ -865,8 +865,11 @@ def predict(
 
     test_df[f"content_pred"] = test_df[[f"content_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
     test_df[f"wording_pred"] = test_df[[f"wording_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+
+    for target_pred in ["content_pred", "wording_pred"]:
+        if target_pred not in columns: columns.append(target_pred)
     
-    return test_df[columns + [f"content_pred", f"wording_pred"]]
+    return test_df[columns]
 
 
 class Runner():
