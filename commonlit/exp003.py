@@ -1003,7 +1003,6 @@ class Runner():
                 df_augtrain = self.augtrain
             )
             
-            print(self.train.columns)
             print_gpu_utilization(self.logger) 
             self.logger.info(f'Start creating oof prediction.')
             self.train = validate(
@@ -1057,7 +1056,7 @@ class Runner():
 
     def run_lgbm(self):
 
-        if not RCFG.train:
+        if not RCFG.use_lgbm:
             return None
         
         self.model_dict = {}
