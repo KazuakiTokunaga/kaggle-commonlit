@@ -655,8 +655,8 @@ class ScoreRegressor:
 
         trainer.train()
         
-        torch.save(custom_model, os.path.join(self.model_dir, "model_weight.pth"))
         self.tokenizer.save_pretrained(self.model_dir)
+        torch.save(custom_model.state_dict(), os.path.join(self.model_dir, "model_weight.pth"))
 
         custom_model.cpu()
         del custom_model
