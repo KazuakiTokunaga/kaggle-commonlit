@@ -1,4 +1,3 @@
-# 特徴量も合わせて学習する
 from typing import List
 import numpy as np 
 import pandas as pd 
@@ -579,16 +578,17 @@ class ScoreRegressor:
                         max_length=self.max_length)
         return tokenized
         
-    def train(self, 
-            fold: int,
-            train_df: pd.DataFrame,
-            valid_df: pd.DataFrame,
-            batch_size: int,
-            learning_rate: float,
-            weight_decay: float,
-            num_train_epochs: float,
-            save_steps: int,
-        ) -> None:
+    def train(
+        self, 
+        fold: int,
+        train_df: pd.DataFrame,
+        valid_df: pd.DataFrame,
+        batch_size: int,
+        learning_rate: float,
+        weight_decay: float,
+        num_train_epochs: float,
+        save_steps: int,
+    ) -> None:
         """fine-tuning"""
         
         train_df[self.input_col] = train_df.apply(self.concatenate_with_sep_token, axis=1)
@@ -664,11 +664,11 @@ class ScoreRegressor:
         torch.cuda.empty_cache()
     
         
-    def predict(self, 
-                test_df: pd.DataFrame,
-                batch_size: int,
-                fold: int,
-               ):
+    def predict(
+        self, 
+        test_df: pd.DataFrame,
+        batch_size: int
+    ):
         """predict content score"""
         
         test_df[self.input_col] = test_df.apply(self.concatenate_with_sep_token, axis=1)
@@ -695,23 +695,22 @@ class ScoreRegressor:
         custom_model.load_state_dict(torch.load(os.path.join(self.model_dir, "model_weight.pth")))
         custom_model.eval()
         
-        
-        model_fold_dir = os.path.join(self.model_dir, str(fold)) 
-
         test_args = TrainingArguments(
-            output_dir=model_fold_dir,
+            output_dir=".",
             do_train = False,
             do_predict = True,
             per_device_eval_batch_size=batch_size,
             dataloader_drop_last = False,
+            save_strategy="no",
         )
 
         # init trainer
         infer_content = Trainer(
-                      model = custom_model, 
-                      tokenizer=self.tokenizer,
-                      data_collator=self.data_collator,
-                      args = test_args)
+            model = custom_model, 
+            tokenizer=self.tokenizer,
+            data_collator=self.data_collator,
+            args = test_args
+        )
 
         preds = infer_content.predict(test_tokenized_dataset)[0]
         pred_df = pd.DataFrame(
@@ -824,8 +823,7 @@ def validate(
         
         pred_df = csr.predict(
             test_df=valid_data, 
-            batch_size=batch_size,
-            fold=fold
+            batch_size=batch_size
         )
 
         train_df.loc[valid_data.index, f"content_pred"] = pred_df[f"content_pred"].values
@@ -870,8 +868,7 @@ def predict(
         
         pred_df = csr.predict(
             test_df=test_df, 
-            batch_size=batch_size,
-            fold=fold
+            batch_size=batch_size
         )
 
         test_df[f"content_pred_{fold}"] = pred_df[f"content_pred"].values
@@ -1065,7 +1062,7 @@ class Runner():
 
     def run_lgbm(self):
 
-        if not RCFG.use_lgbm:
+        if not RCFG.use_lgbm or not RCFG.train:
             return None
         
         self.model_dict = {}
