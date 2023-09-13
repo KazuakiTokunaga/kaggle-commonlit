@@ -681,8 +681,20 @@ class ScoreRegressor:
         test_dataset = Dataset.from_pandas(test_, preserve_index=False) 
         test_tokenized_dataset = test_dataset.map(self.tokenize_function_test, batched=False)
 
-        custom_model = torch.load(os.path.join(self.model_dir, "model_weight.pth"))
+        model_content = AutoModel.from_pretrained(
+            f"{RCFG.base_model_dir}", 
+            config=self.model_config
+        )
+        custom_model = CustomTransformersModel(
+            model_content, 
+            num_labels=2, 
+            additional_features_dim=len(self.additional_feature_cols),
+            n_freeze=CFG.n_freeze
+        )
+        
+        custom_model.load_state_dict(torch.load(os.path.join(self.model_dir, "model_weight.pth")))
         custom_model.eval()
+        
         
         model_fold_dir = os.path.join(self.model_dir, str(fold)) 
 
