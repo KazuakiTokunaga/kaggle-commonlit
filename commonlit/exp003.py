@@ -318,7 +318,7 @@ class Preprocessor:
     def add_all_words(self, series):
 
         prompt_words = Counter()
-        for tokens in series.drop_duplicates():
+        for tokens in series:
             prompt_words.update(tokens)
         self.prompt_words_in_order = [item[0] for item in prompt_words.most_common()] 
 
@@ -659,7 +659,9 @@ class ScoreRegressor:
         torch.save(custom_model.state_dict(), os.path.join(self.model_dir, "model_weight.pth"))
 
         custom_model.cpu()
+        model_content.cpu()
         del custom_model
+        del model_content
         gc.collect()
         torch.cuda.empty_cache()
     
@@ -722,7 +724,9 @@ class ScoreRegressor:
                 )
 
         custom_model.cpu()
+        model_content.cpu()
         del custom_model
+        del model_content
         gc.collect()
         torch.cuda.empty_cache()
 
