@@ -10,6 +10,7 @@ import pickle
 import shutil
 import subprocess
 import json
+import time
 import datetime
 from pickle import dump, load
 from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
@@ -61,6 +62,7 @@ class RCFG:
     debug_size: int =10
     train: bool = True
     predict: bool = True
+    debug_infer: bool = False
     base_model_dir: str = "/kaggle/input/debertav3base"
     output_path: str = ""
     model_dir: str = "." # "/kaggle/commonlit-models"
@@ -136,8 +138,8 @@ class WriteSheet:
         
         scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
         credentials = ServiceAccountCredentials.from_json_keyfile_name(sheet_json_key, scope)
-        gc = gspread.authorize(credentials)
-        self.worksheet = gc.open_by_key(sheet_key)
+        gs = gspread.authorize(credentials)
+        self.worksheet = gs.open_by_key(sheet_key)
     
 
     def write(self, data, sheet_name, table_range='A1'):
@@ -198,6 +200,9 @@ class Preprocessor:
 
         gensim_model = gensim.models.KeyedVectors.load_word2vec_format(RCFG.gensim_bin_model_path, binary=True)
         self.gensim_words = gensim_model.index_to_key
+        
+        del gensim_model
+        gc.collect()
 
     def get_probability(self, word): 
         "Probability of `word`."
@@ -239,7 +244,8 @@ class Preprocessor:
         def check_is_stop_word(word):
             return word in self.STOP_WORDS
         
-        prompt_words = row['prompt_tokens']
+        prompt_id = row['prompt_id']
+        prompt_words = self.prompt_token[prompt_id]
         summary_words = row['summary_tokens']
         if self.STOP_WORDS:
             prompt_words = list(filter(check_is_stop_word, prompt_words))
@@ -254,7 +260,8 @@ class Preprocessor:
 
     def ngram_co_occurrence(self, row, n: int) -> int:
         # Tokenize the original text and summary into words
-        original_tokens = row['prompt_tokens']
+        prompt_id = row['prompt_id']
+        original_tokens = self.prompt_token[prompt_id]
         summary_tokens = row['summary_tokens']
 
         # Generate n-grams for the original text and summary
@@ -297,7 +304,8 @@ class Preprocessor:
     
     def quotes_count(self, row):
         summary = row['text']
-        text = row['prompt_text']
+        prompt_id = row['prompt_id']
+        text = self.prompt_text[prompt_id]
         quotes_from_summary = re.findall(r'"([^"]*)"', summary)
         if len(quotes_from_summary)>0:
             return [quote in text for quote in quotes_from_summary].count(True)
@@ -327,6 +335,15 @@ class Preprocessor:
             if word in self.all_words_rank:
                 continue
             self.all_words_rank[word] = i
+    
+    def create_prompt_dictionary(self, prompts):
+
+        self.prompt_text = dict()
+        self.prompt_token = dict()
+        
+        for id, text, token in zip(prompts['prompt_id'], prompts['prompt_text'], prompts['prompt_tokens']):
+            self.prompt_text[id] = text
+            self.prompt_token[id] = token
     
     def run(self, 
             prompts: pd.DataFrame,
@@ -362,6 +379,10 @@ class Preprocessor:
         
         # count misspelling
         summaries["splling_err_num"] = summaries["text"].progress_apply(self.spelling)
+
+        self.create_prompt_dictionary(prompts)
+        prompts = prompts.drop(['prompt_text', 'prompt_tokens'], axis=1)
+        gc.collect()
         
         # merge prompts and summaries
         input_df = summaries.merge(prompts, how="left", on="prompt_id")
@@ -393,7 +414,7 @@ class Preprocessor:
             input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
 
 
-        return input_df.drop(columns=["summary_tokens", "prompt_tokens"])
+        return input_df.drop(columns=["summary_tokens"])
 
 
 def compute_metrics(eval_pred):
@@ -488,7 +509,7 @@ class CustomTransformersModel(nn.Module):
 
         self.creterion = MCRMSELoss()
 
-    def forward(self, input_ids, features, attention_mask=None, labels=None):
+    def forward(self, input_ids, features=None, attention_mask=None, labels=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
 
         if CFG.mean_pooling:
@@ -678,9 +699,7 @@ class ScoreRegressor:
         test_df['features'] = test_df[self.additional_feature_cols].to_numpy().tolist()
         test_df = test_df[[self.input_col] + ['features']]
 
-        test_ = test_df[[self.input_col] + ['features']]
-
-        test_dataset = Dataset.from_pandas(test_, preserve_index=False) 
+        test_dataset = Dataset.from_pandas(test_df, preserve_index=False) 
         test_tokenized_dataset = test_dataset.map(self.tokenize_function_test, batched=False)
 
         model_content = AutoModel.from_pretrained(
@@ -693,17 +712,24 @@ class ScoreRegressor:
             additional_features_dim=len(self.additional_feature_cols),
             n_freeze=CFG.n_freeze
         )
+
+        model_content.cpu()
+        del model_content
+        gc.collect()
+        torch.cuda.empty_cache()
         
-        custom_model.load_state_dict(torch.load(os.path.join(self.model_dir, "model_weight.pth")))
+        # time.sleep(3600)
+        custom_model.load_state_dict(torch.load(os.path.join(self.model_dir, "model_weight.pth")), strict=False)
         custom_model.eval()
         
         test_args = TrainingArguments(
             output_dir=".",
             do_train = False,
             do_predict = True,
-            per_device_eval_batch_size=batch_size,
+            per_device_eval_batch_size=1,
             dataloader_drop_last = False,
-            save_strategy="no",
+            fp16=True,
+            save_strategy="no"
         )
 
         # init trainer
@@ -724,9 +750,7 @@ class ScoreRegressor:
                 )
 
         custom_model.cpu()
-        model_content.cpu()
         del custom_model
-        del model_content
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -870,10 +894,21 @@ def predict(
             max_length=max_length,
            )
         
-        pred_df = csr.predict(
-            test_df=test_df, 
-            batch_size=batch_size
-        )
+        dfs = []
+        for i in range(0, len(test_df), 3000):
+            batch_df = test_df.iloc[i:i+3000]
+            batch_pred = csr.predict(test_df=batch_df, batch_size=batch_size)
+            dfs.append(batch_pred)
+        pred_df = pd.concat(dfs, axis=0).reset_index(drop=True)
+
+        # pred_df = csr.predict(
+        #     test_df=test_df, 
+        #     batch_size=batch_size
+        # )
+
+        del csr
+        gc.collect()
+        torch.cuda.empty_cache()
 
         test_df[f"content_pred_{fold}"] = pred_df[f"content_pred"].values
         test_df[f"wording_pred_{fold}"] = pred_df[f"wording_pred"].values
@@ -936,15 +971,26 @@ class Runner():
 
     def load_dataset(self):
 
-        self.prompts_train = pd.read_csv(RCFG.data_dir + "prompts_train.csv")
-        self.prompts_test = pd.read_csv(RCFG.data_dir + "prompts_test.csv")
-        self.summaries_train = pd.read_csv(RCFG.data_dir + "summaries_train.csv")
-        self.summaries_test = pd.read_csv(RCFG.data_dir + "summaries_test.csv")
+        if RCFG.train:
+            self.prompts_train = pd.read_csv(RCFG.data_dir + "prompts_train.csv")
+            self.summaries_train = pd.read_csv(RCFG.data_dir + "summaries_train.csv")
+        
+        if RCFG.predict:
+            self.prompts_test = pd.read_csv(RCFG.data_dir + "prompts_test.csv")
+            self.summaries_test = pd.read_csv(RCFG.data_dir + "summaries_test.csv")
+
         self.sample_submission = pd.read_csv(RCFG.data_dir + "sample_submission.csv")
 
         if RCFG.debug:
             self.logger.info('Debug mode. Reduce train data.')
             self.summaries_train = self.summaries_train.head(RCFG.debug_size) # for dev mode
+
+        if RCFG.debug_infer:
+            self.prompts_train = pd.read_csv(RCFG.data_dir + "prompts_train.csv")
+            self.summaries_train = pd.read_csv(RCFG.data_dir + "summaries_train.csv")
+            self.prompts_test = self.prompts_train.copy()
+            self.summaries_test = pd.concat([self.summaries_train, self.summaries_train, self.summaries_train])[:17000]
+            
         
         self.augtrain = None
         if RCFG.use_aug_data:
@@ -958,8 +1004,12 @@ class Runner():
         if RCFG.use_preprocessed_dataset:
             self.logger.info(f'Use exsisting files.')
             nrows = RCFG.debug_size if RCFG.debug else None
-            self.train = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_train_data_file}", nrows=nrows)
-            self.test = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_test_data_file}")
+
+            if RCFG.train:
+                self.train = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_train_data_file}", nrows=nrows)
+            if RCFG.predict:
+                self.test = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_test_data_file}")
+                
             return None
 
         self.logger.info('Start Preprocess.')
@@ -973,6 +1023,12 @@ class Runner():
             self.logger.info('Preprocess test data.')
             self.test = preprocessor.run(self.prompts_test, self.summaries_test, mode="test")
 
+            del self.prompts_test
+            del self.summaries_test
+            gc.collect()
+        
+        del preprocessor
+        gc.collect()
 
     def run_transformers_regressor(self):
 
@@ -989,8 +1045,6 @@ class Runner():
             self.augtrain = self.augtrain[self.augtrain['prompt_id'].notnull()]
             self.augtrain = self.augtrain[self.train.columns]
 
-        input_cols = RCFG.input_cols
-
         if RCFG.train:
             
             torch.cuda.empty_cache()
@@ -1002,7 +1056,7 @@ class Runner():
                 train_df=self.train,
                 model_name=CFG.model_name,
                 targets=self.targets,
-                inputs=input_cols,
+                inputs=RCFG.input_cols,
                 learning_rate=CFG.learning_rate,
                 hidden_dropout_prob=CFG.hidden_dropout_prob,
                 attention_probs_dropout_prob=CFG.attention_probs_dropout_prob,
@@ -1020,7 +1074,7 @@ class Runner():
                 logger=self.logger,
                 train_df=self.train,
                 targets=self.targets,
-                inputs=input_cols,
+                inputs=RCFG.input_cols,
                 batch_size=CFG.batch_size,
                 model_name=CFG.model_name,
                 hidden_dropout_prob=CFG.hidden_dropout_prob,
@@ -1039,13 +1093,15 @@ class Runner():
         
         if RCFG.predict:
             
+            # time.sleep(3600)
+            self.test['fixed_summary_text'] = self.test['fixed_summary_text'].str[:1000]
             print_gpu_utilization(self.logger)
             self.logger.info(f'Start Predicting.')
             self.test = predict(
                 logger=self.logger,
                 test_df=self.test,
                 targets=self.targets,
-                inputs = input_cols,
+                inputs = RCFG.input_cols,
                 batch_size=CFG.batch_size,
                 model_name=CFG.model_name,
                 hidden_dropout_prob=CFG.hidden_dropout_prob,
@@ -1169,7 +1225,6 @@ class Runner():
             preds = []
 
             for fold, model in enumerate(models):
-                # ilocで取り出す行を指定
                 X_eval_cv = self.test[self.lgbm_columns]
 
                 pred = model.predict(X_eval_cv)
