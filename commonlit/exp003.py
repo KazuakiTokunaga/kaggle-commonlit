@@ -724,7 +724,7 @@ class ScoreRegressor:
         torch.cuda.empty_cache()
         
         # time.sleep(3600)
-        custom_model.load_state_dict(torch.load(os.path.join(self.model_dir, "model_weight.pth")), strict=False)
+        custom_model.load_state_dict(torch.load(os.path.join(self.model_dir, "model_weight.pth")))
         custom_model.eval()
         
         test_args = TrainingArguments(
