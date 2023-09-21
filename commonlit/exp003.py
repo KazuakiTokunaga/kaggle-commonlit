@@ -597,7 +597,12 @@ class ScoreRegressor:
                         padding="max_length",
                         truncation=True,
                         max_length=self.max_length)
-        return tokenized
+        features = examples['features']
+        return {
+            **tokenized,
+            "features": features
+        }
+                
         
     def train(
         self, 
@@ -893,18 +898,11 @@ def predict(
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
            )
-        
-        dfs = []
-        for i in range(0, len(test_df), 3000):
-            batch_df = test_df.iloc[i:i+3000]
-            batch_pred = csr.predict(test_df=batch_df, batch_size=batch_size)
-            dfs.append(batch_pred)
-        pred_df = pd.concat(dfs, axis=0).reset_index(drop=True)
 
-        # pred_df = csr.predict(
-        #     test_df=test_df, 
-        #     batch_size=batch_size
-        # )
+        pred_df = csr.predict(
+            test_df=test_df, 
+            batch_size=batch_size
+        )
 
         del csr
         gc.collect()
