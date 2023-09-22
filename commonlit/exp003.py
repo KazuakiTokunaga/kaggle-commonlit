@@ -107,6 +107,8 @@ class RCFG:
     use_train_data_file: str = "train_preprocessed.csv"
     use_test_data_file: str = "test_preprocessed.csv"
     use_lgbm: bool = False
+    scaling_predict: bool = False
+    scaling_by_each: bool = True
 
 class Logger:
 
@@ -405,7 +407,7 @@ class Preprocessor:
 
         df_features = input_df[RCFG.additional_features].copy()
         
-        if RCFG.transform_by_each:
+        if RCFG.scaling_by_each:
             for prompt_id in prompts['prompt_id']:
                 scaler = StandardScaler()
                 input_df.loc[input_df['prompt_id']==prompt_id, RCFG.additional_features] = scaler.fit_transform(
@@ -760,6 +762,10 @@ class ScoreRegressor:
                         f"wording_pred"
                     ]
                 )
+        
+        if RCFG.scaling_predict:
+            scaler = StandardScaler()
+            pred_df[["content_pred", "wording_pred"]] = scaler.fit_transform(pred_df[["content_pred", "wording_pred"]])
 
         custom_model.cpu()
         del custom_model
