@@ -405,13 +405,20 @@ class Preprocessor:
 
         df_features = input_df[RCFG.additional_features].copy()
         
-        if mode == 'train':
-            scaler = StandardScaler()
-            input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
-            dump(scaler, open(f"{RCFG.model_dir}/scaler.pkl", "wb"))
+        if RCFG.transform_by_each:
+            for prompt_id in prompts['prompt_id']:
+                scaler = StandardScaler()
+                input_df.loc[input_df['prompt_id']==prompt_id, RCFG.additional_features] = scaler.fit_transform(
+                    input_df.loc[input_df['prompt_id']==prompt_id, RCFG.additional_features]
+                )
         else:
-            scaler = load(open(f"{RCFG.model_dir}/scaler.pkl", "rb"))
-            input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
+            if mode == 'train':
+                scaler = StandardScaler()
+                input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
+                dump(scaler, open(f"{RCFG.model_dir}/scaler.pkl", "wb"))
+            else:
+                scaler = load(open(f"{RCFG.model_dir}/scaler.pkl", "rb"))
+                input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
 
 
         return input_df.drop(columns=["summary_tokens"])
@@ -620,8 +627,8 @@ class ScoreRegressor:
         train_df[self.input_col] = train_df.apply(self.concatenate_with_sep_token, axis=1)
         valid_df[self.input_col] = valid_df.apply(self.concatenate_with_sep_token, axis=1) 
         
-        train_df['features'] = train_df[self.additional_feature_cols].to_numpy().tolist()
-        valid_df['features'] = valid_df[self.additional_feature_cols].to_numpy().tolist()
+        train_df['features'] = train_df[self.additional_feature_cols].fillna(0).to_numpy().tolist()
+        valid_df['features'] = valid_df[self.additional_feature_cols].fillna(0).to_numpy().tolist()
         train_df = train_df[[self.input_col] + ['features'] + self.target_cols]
         valid_df = valid_df[[self.input_col] + ['features'] +  self.target_cols]
 
@@ -701,7 +708,7 @@ class ScoreRegressor:
         
         test_df[self.input_col] = test_df.apply(self.concatenate_with_sep_token, axis=1)
 
-        test_df['features'] = test_df[self.additional_feature_cols].to_numpy().tolist()
+        test_df['features'] = test_df[self.additional_feature_cols].fillna(0).to_numpy().tolist()
         test_df = test_df[[self.input_col] + ['features']]
 
         test_dataset = Dataset.from_pandas(test_df, preserve_index=False) 
