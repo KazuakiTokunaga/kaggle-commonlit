@@ -91,7 +91,6 @@ class RCFG:
     additional_features = [
         "summary_length", 
         "splling_err_num", 
-        "prompt_length",
         "length_ratio",
         "word_overlap_count",
         "bigram_overlap_count",
@@ -423,7 +422,7 @@ class Preprocessor:
                 input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
 
 
-        return input_df.drop(columns=["summary_tokens"])
+        return input_df.drop(columns=["summary_tokens", "prompt_length"])
 
 
 def compute_metrics(eval_pred):
