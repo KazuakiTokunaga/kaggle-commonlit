@@ -112,14 +112,14 @@ class RCFG:
         'flesch_kincaid_grade_level',
         'count_difficult_words'
     ]
-    report_to: str = "wandb" # none
+    report_to: str = "wandb" # noneT
     on_kaggle: bool = True
     use_preprocessed_dataset: bool = True
     preprocessed_dataset_path: str = ""
     use_train_data_file: str = "train_preprocessed.csv"
     use_test_data_file: str = "test_preprocessed.csv"
     use_lgbm: bool = False
-    scaling: bool = True
+    scaling: bool = False
 
 class Logger:
 
