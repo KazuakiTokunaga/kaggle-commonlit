@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import json
 import time
+from textblob import TextBlob
 import datetime
 from pickle import dump, load
 from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
@@ -274,35 +275,6 @@ class Preprocessor:
 
         return len(common_ngrams)
     
-    def ner_overlap_count(self, row, mode:str):
-        model = self.spacy_ner_model
-        def clean_ners(ner_list):
-            return set([(ner[0].lower(), ner[1]) for ner in ner_list])
-        prompt = model(row['prompt_text'])
-        summary = model(row['text'])
-
-        if "spacy" in str(model):
-            prompt_ner = set([(token.text, token.label_) for token in prompt.ents])
-            summary_ner = set([(token.text, token.label_) for token in summary.ents])
-        elif "stanza" in str(model):
-            prompt_ner = set([(token.text, token.type) for token in prompt.ents])
-            summary_ner = set([(token.text, token.type) for token in summary.ents])
-        else:
-            raise Exception("Model not supported")
-
-        prompt_ner = clean_ners(prompt_ner)
-        summary_ner = clean_ners(summary_ner)
-
-        intersecting_ners = prompt_ner.intersection(summary_ner)
-        
-        ner_dict = dict(Counter([ner[1] for ner in intersecting_ners]))
-        
-        if mode == "train":
-            return ner_dict
-        elif mode == "test":
-            return {key: ner_dict.get(key) for key in self.ner_keys}
-
-    
     def quotes_count(self, row):
         summary = row['text']
         prompt_id = row['prompt_id']
@@ -345,6 +317,67 @@ class Preprocessor:
         for id, text, token in zip(prompts['prompt_id'], prompts['prompt_text'], prompts['prompt_tokens']):
             self.prompt_text[id] = text
             self.prompt_token[id] = token
+
+    def calculate_unique_words(self,text):
+        unique_words = set(text.split())
+        return len(unique_words)
+    
+    def calculate_keyword_density(self,row):
+        keywords = set(row['prompt_text'].split())
+        text_words = row['text'].split()
+        keyword_count = sum(1 for word in text_words if word in keywords)
+        return keyword_count / len(text_words)
+    
+    def count_syllables(self,word):
+
+        VOWEL_RUNS = re.compile("[aeiouy]+", flags=re.I)
+        EXCEPTIONS = re.compile("[^aeiou]e[sd]?$|" + "[^e]ely$", flags=re.I)
+        ADDITIONAL = re.compile("[^aeioulr][lr]e[sd]?$|[csgz]es$|[td]ed$|"+ ".y[aeiou]|ia(?!n$)|eo|ism$|[^aeiou]ire$|[^gq]ua",flags=re.I)
+
+        vowel_runs = len(VOWEL_RUNS.findall(word))
+        exceptions = len(EXCEPTIONS.findall(word))
+        additional = len(ADDITIONAL.findall(word))
+            
+        return max(1, vowel_runs - exceptions + additional)
+    
+
+    def flesch_reading_ease_manual(self,text):
+        total_sentences = len(TextBlob(text).sentences)
+        total_words = len(TextBlob(text).words)
+        total_syllables = sum(self.count_syllables(word) for word in TextBlob(text).words)
+
+        if total_sentences == 0 or total_words == 0:
+            return 0
+
+        flesch_score = 206.835 - 1.015 * (total_words / total_sentences) - 84.6 * (total_syllables / total_words)
+        return flesch_score
+    
+    def flesch_kincaid_grade_level(self, text):
+        total_sentences = len(TextBlob(text).sentences)
+        total_words = len(TextBlob(text).words)
+        total_syllables = sum(self.count_syllables(word) for word in TextBlob(text).words)
+
+        if total_sentences == 0 or total_words == 0:
+            return 0
+
+        fk_grade = 0.39 * (total_words / total_sentences) + 11.8 * (total_syllables / total_words) - 15.59
+        return fk_grade
+
+    def gunning_fog(self, text):
+        total_sentences = len(TextBlob(text).sentences)
+        total_words = len(TextBlob(text).words)
+        complex_words = sum(1 for word in TextBlob(text).words if self.count_syllables(word) > 2)
+
+        if total_sentences == 0 or total_words == 0:
+            return 0
+
+        fog_index = 0.4 * ((total_words / total_sentences) + 100 * (complex_words / total_words))
+        return fog_index
+    
+    def count_difficult_words(self, text, syllable_threshold=3):
+        words = TextBlob(text).words
+        difficult_words_count = sum(1 for word in words if self.count_syllables(word) >= syllable_threshold)
+        return difficult_words_count
     
     def run(self, 
             prompts: pd.DataFrame,
@@ -372,6 +405,10 @@ class Preprocessor:
             lambda x: self.add_spelling_dictionary(x)
         )
         self.add_all_words(prompts['prompt_tokens'])
+
+        # prompts['gunning_fog_prompt'] = prompts['prompt_text'].apply(self.gunning_fog)
+        # prompts['flesch_kincaid_grade_level_prompt'] = prompts['prompt_text'].apply(self.flesch_kincaid_grade_level)
+        # prompts['flesch_reading_ease_prompt'] = prompts['prompt_text'].apply(self.flesch_reading_ease_manual)
         
         # fix misspelling
         summaries["fixed_summary_text"] = summaries["summary_tokens"].progress_apply(
@@ -403,6 +440,20 @@ class Preprocessor:
         input_df['trigram_overlap_ratio'] = input_df['trigram_overlap_count'] / (input_df['summary_length'] - 2)
         
         input_df['quotes_count'] = input_df.progress_apply(self.quotes_count, axis=1)
+
+        # 後から追加したもの
+        input_df['num_unq_words']=[len(list(set(x.lower().split(' ')))) for x in input_df.text]
+        input_df['num_chars']= [len(x) for x in input_df.text]
+        input_df['avg_word_length'] = input_df['text'].apply(lambda x: np.mean([len(word) for word in x.split()]))
+        input_df['comma_count'] = input_df['text'].apply(lambda x: x.count(','))
+        input_df['semicolon_count'] = input_df['text'].apply(lambda x: x.count(';'))
+        input_df['flesch_reading_ease'] = input_df['text'].apply(self.flesch_reading_ease_manual)
+        input_df['word_count'] = input_df['text'].apply(lambda x: len(x.split()))
+        input_df['sentence_length'] = input_df['text'].apply(lambda x: len(x.split('.')))
+        input_df['vocabulary_richness'] = input_df['text'].apply(lambda x: len(set(x.split())))
+        input_df['gunning_fog'] = input_df['text'].apply(self.gunning_fog)
+        input_df['flesch_kincaid_grade_level'] = input_df['text'].apply(self.flesch_kincaid_grade_level)
+        input_df['count_difficult_words'] = input_df['text'].apply(self.count_difficult_words)
 
         df_features = input_df[RCFG.additional_features].copy()
         
