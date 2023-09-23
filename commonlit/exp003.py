@@ -98,7 +98,19 @@ class RCFG:
         "bigram_overlap_ratio",
         "trigram_overlap_count",
         "trigram_overlap_ratio",
-        "quotes_count"
+        "quotes_count",
+        'num_unq_words', 
+        'num_chars',
+        'avg_word_length', 
+        'comma_count', 
+        'semicolon_count',
+        'flesch_reading_ease', 
+        'word_count', 
+        'sentence_length',
+        'vocabulary_richness', 
+        'gunning_fog', 
+        'flesch_kincaid_grade_level',
+        'count_difficult_words'
     ]
     report_to: str = "wandb" # none
     on_kaggle: bool = True
@@ -107,8 +119,7 @@ class RCFG:
     use_train_data_file: str = "train_preprocessed.csv"
     use_test_data_file: str = "test_preprocessed.csv"
     use_lgbm: bool = False
-    scaling_predict: bool = False
-    scaling_by_each: bool = True
+    scaling: bool = True
 
 class Logger:
 
@@ -457,13 +468,7 @@ class Preprocessor:
 
         df_features = input_df[RCFG.additional_features].copy()
         
-        if RCFG.scaling_by_each:
-            for prompt_id in prompts['prompt_id']:
-                scaler = StandardScaler()
-                input_df.loc[input_df['prompt_id']==prompt_id, RCFG.additional_features] = scaler.fit_transform(
-                    input_df.loc[input_df['prompt_id']==prompt_id, RCFG.additional_features]
-                )
-        else:
+        if RCFG.scaling:
             if mode == 'train':
                 scaler = StandardScaler()
                 input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
@@ -813,10 +818,6 @@ class ScoreRegressor:
                     ]
                 )
         
-        if RCFG.scaling_predict:
-            scaler = StandardScaler()
-            pred_df[["content_pred", "wording_pred"]] = scaler.fit_transform(pred_df[["content_pred", "wording_pred"]])
-
         custom_model.cpu()
         del custom_model
         gc.collect()
