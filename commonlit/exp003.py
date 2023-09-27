@@ -345,7 +345,8 @@ class Preprocessor:
         return len(unique_words)
     
     def calculate_keyword_density(self,row):
-        keywords = set(row['prompt_text'].split())
+        prompt_id = row['prompt_id']
+        keywords = set(self.prompt_text[prompt_id].split())
         text_words = row['text'].split()
         keyword_count = sum(1 for word in text_words if word in keywords)
         return keyword_count / len(text_words)
@@ -403,7 +404,8 @@ class Preprocessor:
     
     def calculate_text_similarity(self, row):
         vectorizer = TfidfVectorizer()
-        tfidf_matrix = vectorizer.fit_transform([row['prompt_text'], row['text']])
+        prompt_id = row['prompt_id']
+        tfidf_matrix = vectorizer.fit_transform(self.prompt_text[prompt_id], row['text'])
         return cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2]).flatten()[0]
 
     def calculate_pos_ratios(self , text):
@@ -514,7 +516,7 @@ class Preprocessor:
                 input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
 
 
-        return input_df.drop(columns=["summary_tokens", "prompt_length", "pos_ratios"])
+        return input_df.drop(columns=["summary_tokens", "prompt_length", "pos_ratios", "punctuation_ratios"])
 
 
 def compute_metrics(eval_pred):
