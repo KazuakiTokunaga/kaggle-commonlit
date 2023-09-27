@@ -115,6 +115,11 @@ class RCFG:
         'gunning_fog', 
         'flesch_kincaid_grade_level',
         'count_difficult_words',
+        'keyword_density',
+        'jaccard_similarity',
+        'text_similarity',
+        'pos_mean',
+        'punctuation_sum',
         'grade', # ここからメタデータ
         'lexile',
         'lexile_scaled',
