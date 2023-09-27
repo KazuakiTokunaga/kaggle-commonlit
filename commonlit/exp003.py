@@ -405,7 +405,7 @@ class Preprocessor:
     def calculate_text_similarity(self, row):
         vectorizer = TfidfVectorizer()
         prompt_id = row['prompt_id']
-        tfidf_matrix = vectorizer.fit_transform(self.prompt_text[prompt_id], row['text'])
+        tfidf_matrix = vectorizer.fit_transform([self.prompt_text[prompt_id], row['text']])
         return cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2]).flatten()[0]
 
     def calculate_pos_ratios(self , text):
