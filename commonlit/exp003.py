@@ -497,7 +497,9 @@ class Preprocessor:
         input_df['flesch_kincaid_grade_level'] = input_df['text'].apply(self.flesch_kincaid_grade_level)
         input_df['count_difficult_words'] = input_df['text'].apply(self.count_difficult_words)
         input_df['keyword_density'] = input_df.apply(self.calculate_keyword_density, axis=1)
-        input_df['jaccard_similarity'] = input_df.apply(lambda row: len(set(word_tokenize(row['prompt_text'])) & set(word_tokenize(row['text']))) / len(set(word_tokenize(row['prompt_text'])) | set(word_tokenize(row['text']))), axis=1)
+        input_df['jaccard_similarity'] = input_df.apply(
+            lambda row: len(set(word_tokenize(self.prompt_text[row['prompt_id']])) & set(word_tokenize(row['text']))) / len(set(word_tokenize(self.prompt_text[row['prompt_id']])) | set(word_tokenize(row['text']))), axis=1
+        )
         input_df['text_similarity'] = input_df.progress_apply(self.calculate_text_similarity, axis=1)
         input_df['pos_ratios'] = input_df['text'].apply(self.calculate_pos_ratios)
         input_df['pos_mean'] = input_df['pos_ratios'].apply(lambda x: np.mean(list(x.values())))
