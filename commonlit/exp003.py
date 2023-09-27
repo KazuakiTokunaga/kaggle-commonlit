@@ -729,8 +729,8 @@ class ScoreRegressor:
         train_df[self.input_col] = train_df.apply(self.concatenate_with_sep_token, axis=1)
         valid_df[self.input_col] = valid_df.apply(self.concatenate_with_sep_token, axis=1) 
         
-        train_df['features'] = train_df[self.additional_feature_cols].fillna(0).to_numpy().tolist()
-        valid_df['features'] = valid_df[self.additional_feature_cols].fillna(0).to_numpy().tolist()
+        train_df['features'] = train_df[self.additional_feature_cols].to_numpy().tolist()
+        valid_df['features'] = valid_df[self.additional_feature_cols].to_numpy().tolist()
         train_df = train_df[[self.input_col] + ['features'] + self.target_cols]
         valid_df = valid_df[[self.input_col] + ['features'] +  self.target_cols]
 
@@ -810,7 +810,7 @@ class ScoreRegressor:
         
         test_df[self.input_col] = test_df.apply(self.concatenate_with_sep_token, axis=1)
 
-        test_df['features'] = test_df[self.additional_feature_cols].fillna(0).to_numpy().tolist()
+        test_df['features'] = test_df[self.additional_feature_cols].to_numpy().tolist()
         test_df = test_df[[self.input_col] + ['features']]
 
         test_dataset = Dataset.from_pandas(test_df, preserve_index=False) 
