@@ -26,10 +26,13 @@ from sklearn.preprocessing import StandardScaler
 import torch
 import torch.nn as nn
 from sklearn.model_selection import KFold, GroupKFold
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from oauth2client.service_account import ServiceAccountCredentials
 from tqdm import tqdm
 
 import nltk
+from nltk import pos_tag
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.tokenize.treebank import TreebankWordDetokenizer
@@ -398,6 +401,24 @@ class Preprocessor:
         difficult_words_count = sum(1 for word in words if self.count_syllables(word) >= syllable_threshold)
         return difficult_words_count
     
+    def calculate_text_similarity(self, row):
+        vectorizer = TfidfVectorizer()
+        tfidf_matrix = vectorizer.fit_transform([row['prompt_text'], row['text']])
+        return cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2]).flatten()[0]
+
+    def calculate_pos_ratios(self , text):
+        pos_tags = pos_tag(nltk.word_tokenize(text))
+        pos_counts = Counter(tag for word, tag in pos_tags)
+        total_words = len(pos_tags)
+        ratios = {tag: count / total_words for tag, count in pos_counts.items()}
+        return ratios
+    
+    def calculate_punctuation_ratios(self,text):
+        total_chars = len(text)
+        punctuation_counts = Counter(char for char in text if char in '.,!?;:"()[]{}')
+        ratios = {char: count / total_chars for char, count in punctuation_counts.items()}
+        return ratios
+    
     def run(self, 
             prompts: pd.DataFrame,
             summaries:pd.DataFrame,
@@ -473,6 +494,13 @@ class Preprocessor:
         input_df['gunning_fog'] = input_df['text'].apply(self.gunning_fog)
         input_df['flesch_kincaid_grade_level'] = input_df['text'].apply(self.flesch_kincaid_grade_level)
         input_df['count_difficult_words'] = input_df['text'].apply(self.count_difficult_words)
+        input_df['keyword_density'] = input_df.apply(self.calculate_keyword_density, axis=1)
+        input_df['jaccard_similarity'] = input_df.apply(lambda row: len(set(word_tokenize(row['prompt_text'])) & set(word_tokenize(row['text']))) / len(set(word_tokenize(row['prompt_text'])) | set(word_tokenize(row['text']))), axis=1)
+        input_df['text_similarity'] = input_df.progress_apply(self.calculate_text_similarity, axis=1)
+        input_df['pos_ratios'] = input_df['text'].apply(self.calculate_pos_ratios)
+        input_df['pos_mean'] = input_df['pos_ratios'].apply(lambda x: np.mean(list(x.values())))
+        input_df['punctuation_ratios'] = input_df['text'].apply(self.calculate_punctuation_ratios)
+        input_df['punctuation_sum'] = input_df['punctuation_ratios'].apply(lambda x: np.sum(list(x.values())))
 
         df_features = input_df[RCFG.additional_features].copy()
         
@@ -486,7 +514,7 @@ class Preprocessor:
                 input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
 
 
-        return input_df.drop(columns=["summary_tokens", "prompt_length"])
+        return input_df.drop(columns=["summary_tokens", "prompt_length", "pos_ratios"])
 
 
 def compute_metrics(eval_pred):
@@ -1070,6 +1098,7 @@ class Runner():
             self.summaries_train = pd.read_csv(RCFG.data_dir + "summaries_train.csv")
 
             if RCFG.join_metadata:
+                self.logger.info('Use prompts metadata.')
                 prompt_grade = pd.read_csv(RCFG.metadata_path)
                 self.prompts_train = join_metadata(self.prompts_train, prompt_grade, 'prompt_title', 'title', 'grade')
         
