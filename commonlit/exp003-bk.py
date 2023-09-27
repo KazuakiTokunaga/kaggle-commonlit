@@ -592,7 +592,20 @@ class CustomTransformersModel(nn.Module):
         self.base_model = base_model
         self.additional_features_dim = additional_features_dim
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(base_model.config.hidden_size, 2)
+
+        if CFG.additional_features:
+            self.classifier = nn.Sequential(
+                nn.Dropout(dropout),
+                nn.Linear(
+                    base_model.config.hidden_size + additional_features_dim, 
+                    hidden_units,
+                ),
+                nn.ReLU(inplace=True),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_units, num_labels)
+            )
+        else:
+            self.classifier = nn.Linear(base_model.config.hidden_size, 2)
 
         # freezing embeddings layer
         if n_freeze:
@@ -605,7 +618,7 @@ class CustomTransformersModel(nn.Module):
 
         self.creterion = MCRMSELoss()
 
-    def forward(self, input_ids, attention_mask=None, labels=None):
+    def forward(self, input_ids, features=None, attention_mask=None, labels=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
 
         if CFG.mean_pooling:
@@ -620,7 +633,10 @@ class CustomTransformersModel(nn.Module):
             # use CLS token
             base_model_output = outputs[0][:, 0, :]
         
-        logits = self.classifier(base_model_output)
+        if CFG.additional_features:
+            logits = self.classifier(torch.cat((base_model_output, features), 1))
+        else:
+            logits = self.classifier(base_model_output)
 
         if labels is not None:
             loss = self.creterion(logits, labels)
@@ -674,13 +690,15 @@ class ScoreRegressor:
 
     def tokenize_function(self, examples: pd.DataFrame):
         labels = [examples["content"], examples["wording"]]
+        features = examples['features']
         tokenized = self.tokenizer(examples[self.input_col],
                         padding="max_length",
                         truncation=True,
                         max_length=self.max_length)
         return {
             **tokenized,
-            "labels": labels
+            "labels": labels,
+            "features": features
         }
     
     def tokenize_function_test(self, examples: pd.DataFrame):
@@ -688,7 +706,12 @@ class ScoreRegressor:
                         padding="max_length",
                         truncation=True,
                         max_length=self.max_length)
-        return tokenized
+        features = examples['features']
+        return {
+            **tokenized,
+            "features": features
+        }
+                
         
     def train(
         self, 
@@ -706,8 +729,11 @@ class ScoreRegressor:
         train_df[self.input_col] = train_df.apply(self.concatenate_with_sep_token, axis=1)
         valid_df[self.input_col] = valid_df.apply(self.concatenate_with_sep_token, axis=1) 
         
-        train_df = train_df[[self.input_col] + self.target_cols]
-        valid_df = valid_df[[self.input_col] + self.target_cols]
+        train_df['features'] = train_df[self.additional_feature_cols].to_numpy().tolist()
+        valid_df['features'] = valid_df[self.additional_feature_cols].to_numpy().tolist()
+        train_df = train_df[[self.input_col] + ['features'] + self.target_cols]
+        valid_df = valid_df[[self.input_col] + ['features'] +  self.target_cols]
+
         
         model_content = AutoModel.from_pretrained(
             f"{RCFG.base_model_dir}", 
@@ -783,7 +809,9 @@ class ScoreRegressor:
         """predict content score"""
         
         test_df[self.input_col] = test_df.apply(self.concatenate_with_sep_token, axis=1)
-        test_df = test_df[[self.input_col]]
+
+        test_df['features'] = test_df[self.additional_feature_cols].fillna(0).to_numpy().tolist()
+        test_df = test_df[[self.input_col] + ['features']]
 
         test_dataset = Dataset.from_pandas(test_df, preserve_index=False) 
         test_tokenized_dataset = test_dataset.map(self.tokenize_function_test, batched=False)
