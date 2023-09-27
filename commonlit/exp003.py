@@ -71,6 +71,7 @@ class RCFG:
     use_aug_data: bool = False
     aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
     gensim_bin_model_path: str = "/kaggle/input/googlenewsvectorsnegative300/GoogleNews-vectors-negative300.bin"
+    metadata_path: str = "/kaggle/input/commonlit-text-metadata/prompt_grade_simple.csv"
     aug_data_list: [
         "back_translation_Hel_fr"
     ]
@@ -99,7 +100,7 @@ class RCFG:
         "trigram_overlap_count",
         "trigram_overlap_ratio",
         "quotes_count",
-        'num_unq_words', 
+        'num_unq_words', # ここから追加分
         'num_chars',
         'avg_word_length', 
         'comma_count', 
@@ -110,7 +111,13 @@ class RCFG:
         'vocabulary_richness', 
         'gunning_fog', 
         'flesch_kincaid_grade_level',
-        'count_difficult_words'
+        'count_difficult_words',
+        'grade', # ここからメタデータ
+        'lexile',
+        'lexile_scaled',
+        'is_prose',
+        'author_type',
+        'author_frequency'
     ]
     report_to: str = "wandb" # noneT
     on_kaggle: bool = True
@@ -120,6 +127,7 @@ class RCFG:
     use_test_data_file: str = "test_preprocessed.csv"
     use_lgbm: bool = False
     scaling: bool = False
+    join_metadata: bool = True
 
 class Logger:
 
@@ -984,6 +992,30 @@ def predict(
     return test_df[columns]
 
 
+def join_metadata(df1, df2, df1_title_col, df2_title_col, grade_col):
+    # Copy dataframes to avoid modifying the originals
+    df1 = df1.copy()
+    df2 = df2.copy()
+
+    # Preprocess titles
+    df1[df1_title_col] = df1[df1_title_col].str.replace('"', '').str.strip()
+    df2[df2_title_col] = df2[df2_title_col].str.replace('"', '').str.strip()
+
+    # Remove duplicate grades
+    df2 = df2.drop_duplicates(subset=df2_title_col, keep='first')
+
+    # Join dataframes
+    merged_df = df1.merge(df2, how='left', left_on=df1_title_col, right_on=df2_title_col)
+    
+
+    # Postprocess grades
+    merged_df[grade_col] = merged_df[grade_col].fillna(0)
+    merged_df[grade_col] = merged_df[grade_col].astype(int).astype('category')
+
+ 
+    return merged_df
+
+
 class Runner():
 
     def __init__(
@@ -1036,10 +1068,18 @@ class Runner():
         if RCFG.train:
             self.prompts_train = pd.read_csv(RCFG.data_dir + "prompts_train.csv")
             self.summaries_train = pd.read_csv(RCFG.data_dir + "summaries_train.csv")
+
+            if RCFG.join_metadata:
+                prompt_grade = pd.read_csv(RCFG.metadata_path)
+                self.prompts_train = join_metadata(self.prompts_train, prompt_grade, 'prompt_title', 'title', 'grade')
         
         if RCFG.predict:
             self.prompts_test = pd.read_csv(RCFG.data_dir + "prompts_test.csv")
             self.summaries_test = pd.read_csv(RCFG.data_dir + "summaries_test.csv")
+
+            if RCFG.join_metadata:
+                prompt_grade = pd.read_csv(RCFG.metadata_path)
+                self.prompts_test = join_metadata(self.prompts_test, prompt_grade, 'prompt_title', 'title', 'grade')
 
         self.sample_submission = pd.read_csv(RCFG.data_dir + "sample_submission.csv")
 
