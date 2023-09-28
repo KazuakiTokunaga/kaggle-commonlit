@@ -57,6 +57,7 @@ class CFG:
     max_length: int =512
     n_freeze: int=4
     mean_pooling: bool=False
+    several_layer: bool=False
     additional_features: bool=True
 
 class RCFG:
@@ -617,8 +618,9 @@ class CustomTransformersModel(nn.Module):
             sum_mask = input_mask_expanded.sum(1)
             sum_mask = torch.clamp(sum_mask, min=1e-9)
             base_model_output = sum_embeddings / sum_mask
+        elif CFG.several_layer:
+            base_model_output = torch.cat(outputs[-4:], 2)[:, 0, :]
         else:
-            # use CLS token
             base_model_output = outputs[0][:, 0, :]
         
         logits = self.classifier(base_model_output)
