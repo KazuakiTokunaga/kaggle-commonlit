@@ -613,7 +613,6 @@ class CustomTransformersModel(nn.Module):
 
     def forward(self, input_ids, attention_mask=None, labels=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
-        print(outputs.hidden_states.size())
 
         if CFG.mean_pooling:
             # mean pooling
