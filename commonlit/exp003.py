@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import numpy as np 
 import pandas as pd 
 import warnings
@@ -75,6 +75,7 @@ class RCFG:
     aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
     gensim_bin_model_path: str = "/kaggle/input/googlenewsvectorsnegative300/GoogleNews-vectors-negative300.bin"
     metadata_path: str = "/kaggle/input/commonlit-text-metadata/prompt_grade_simple.csv"
+    lgbm_model_dir: Optional[str] = None
     aug_data_list: [
         "back_translation_Hel_fr"
     ]
@@ -1046,6 +1047,9 @@ class Runner():
 
         self.data_to_write = []
 
+        if RCFG.lgbm_model_dir is None:
+            RCFG.lgbm_model_dir = RCFG.model_dir
+
         if RCFG.save_to_sheet:
             self.logger.info('Initializing Google Sheet.')
             self.sheet = WriteSheet(
@@ -1301,7 +1305,7 @@ class Runner():
 
 
         # delete old model files
-        model_dir = f'{RCFG.model_dir}/gbtmodel'
+        model_dir = f'{RCFG.lgbm_model_dir}/gbtmodel'
         if os.path.exists(model_dir):
             shutil.rmtree(model_dir)
         os.makedirs(model_dir)
@@ -1328,7 +1332,7 @@ class Runner():
 
 
         self.logger.info('Start creating submission data using LGBM.')
-        with open(f'{RCFG.model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
+        with open(f'{RCFG.lgbm_model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
             self.model_dict = pickle.load(f)
 
         pred_dict = {}
