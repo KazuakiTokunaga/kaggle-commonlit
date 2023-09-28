@@ -594,7 +594,11 @@ class CustomTransformersModel(nn.Module):
         self.base_model = base_model
         self.additional_features_dim = additional_features_dim
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(base_model.config.hidden_size, 2)
+
+        if CFG.several_layer:
+            self.classifier = nn.Linear(base_model.config.hidden_size*4, 2)
+        else:
+            self.classifier = nn.Linear(base_model.config.hidden_size*4, 2)
 
         # freezing embeddings layer
         if n_freeze:
