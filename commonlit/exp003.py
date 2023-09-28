@@ -598,7 +598,7 @@ class CustomTransformersModel(nn.Module):
         if CFG.several_layer:
             self.classifier = nn.Linear(base_model.config.hidden_size*4, 2)
         else:
-            self.classifier = nn.Linear(base_model.config.hidden_size*4, 2)
+            self.classifier = nn.Linear(base_model.config.hidden_size, 2)
 
         # freezing embeddings layer
         if n_freeze:
@@ -623,7 +623,7 @@ class CustomTransformersModel(nn.Module):
             sum_mask = torch.clamp(sum_mask, min=1e-9)
             base_model_output = sum_embeddings / sum_mask
         elif CFG.several_layer:
-            base_model_output = torch.cat(outputs[-4:], 2)[:, 0, :]
+            base_model_output = torch.cat(outputs.hidden_states[-4:], 2)[:, 0, :]
         else:
             base_model_output = outputs[0][:, 0, :]
         
