@@ -58,6 +58,7 @@ class CFG:
     n_freeze: int=4
     mean_pooling: bool=False
     several_layer: bool=False
+    cls_pooling: bool=True
     additional_features: bool=True
 
 class RCFG:
@@ -597,6 +598,8 @@ class CustomTransformersModel(nn.Module):
 
         if CFG.several_layer:
             self.classifier = nn.Linear(base_model.config.hidden_size*4, 2)
+        if CFG.cls_pooling:
+            self.classifier = nn.Linear(base_model.config.hidden_size*3, 2)
         else:
             self.classifier = nn.Linear(base_model.config.hidden_size, 2)
 
@@ -614,16 +617,31 @@ class CustomTransformersModel(nn.Module):
     def forward(self, input_ids, attention_mask=None, labels=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
 
+        last_hidden_state = outputs[0]
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+
         if CFG.mean_pooling:
-            # mean pooling
-            last_hidden_state = outputs[0]
-            input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
             sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
             sum_mask = input_mask_expanded.sum(1)
             sum_mask = torch.clamp(sum_mask, min=1e-9)
             base_model_output = sum_embeddings / sum_mask
         elif CFG.several_layer:
             base_model_output = torch.cat(outputs.hidden_states[-4:], 2)[:, 0, :]
+        
+        elif CFG.cls_pooling:
+            sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
+            sum_mask = input_mask_expanded.sum(1)
+            sum_mask = torch.clamp(sum_mask, min=1e-9)
+            mean_pooling = sum_embeddings / sum_mask
+
+            mask = (1 - input_mask_expanded)
+            hidden_state = last_hidden_state - mask * 1e3
+            max_pooling =  torch.max(hidden_state, 1)[0]
+
+            cls = last_hidden_state[:, 0, :]
+
+            base_model_output = torch.cat((mean_pooling, max_pooling, cls), 1)
+
         else:
             base_model_output = outputs[0][:, 0, :]
         
