@@ -581,6 +581,7 @@ class MCRMSELoss(nn.Module):
 
         return score
 
+# dropout食わせるべき？
 class CustomTransformersModel(nn.Module):
     def __init__(
             self, 
@@ -625,6 +626,7 @@ class CustomTransformersModel(nn.Module):
             sum_mask = input_mask_expanded.sum(1)
             sum_mask = torch.clamp(sum_mask, min=1e-9)
             base_model_output = sum_embeddings / sum_mask
+
         elif CFG.several_layer:
             base_model_output = torch.cat(outputs.hidden_states[-4:], 2)[:, 0, :]
         
