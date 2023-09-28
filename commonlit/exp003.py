@@ -613,6 +613,7 @@ class CustomTransformersModel(nn.Module):
 
     def forward(self, input_ids, attention_mask=None, labels=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
+        print(outputs.size())
 
         if CFG.mean_pooling:
             # mean pooling
@@ -623,7 +624,7 @@ class CustomTransformersModel(nn.Module):
             sum_mask = torch.clamp(sum_mask, min=1e-9)
             base_model_output = sum_embeddings / sum_mask
         elif CFG.several_layer:
-            base_model_output = torch.cat(outputs.hidden_states[-4:], 2)[:, 0, :]
+            base_model_output = torch.cat(outputs[-4:], 2)[:, 0, :]
         else:
             base_model_output = outputs[0][:, 0, :]
         
