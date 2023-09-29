@@ -58,7 +58,7 @@ class CFG:
     n_freeze: int=4
     mean_pooling: bool=False
     several_layer: bool=False
-    cls_pooling: bool=True
+    cls_pooling: bool=False
     additional_features: bool=True
 
 class RCFG:
