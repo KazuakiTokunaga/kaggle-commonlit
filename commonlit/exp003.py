@@ -792,14 +792,14 @@ class ScoreRegressor:
         )
 
         if CFG.cls_pooling:
-            self.logger('Use CustomTransformerModelV3 with cls_pooling.')
+            self.logger.info('Use CustomTransformerModelV3 with cls_pooling.')
             custom_model = CustomTransformersModelV3(
                 model_content,
                 additional_features_dim=len(self.additional_feature_cols),
                 n_freeze=CFG.n_freeze
             )
         elif CFG.several_layer:
-            self.logger('Use CustomTransformerModelV3 with last 4 transformer layers.')
+            self.logger.info('Use CustomTransformerModelV3 with last 4 transformer layers.')
             custom_model = CustomTransformersModelV2(
                 model_content,
                 additional_features_dim=len(self.additional_feature_cols),
@@ -807,9 +807,9 @@ class ScoreRegressor:
             )
         else:
             if CFG.mean_pooling:
-                self.logger('Use CustomTransformerModel with mean_pooling.')
+                self.logger.info('Use CustomTransformerModel with mean_pooling.')
             else:
-                self.logger('Use CustomTransformerModel with CLS token.')
+                self.logger.info('Use CustomTransformerModel with CLS token.')
             custom_model = CustomTransformersModel(
                 model_content,
                 additional_features_dim=len(self.additional_feature_cols),
