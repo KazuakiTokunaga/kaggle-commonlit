@@ -731,6 +731,7 @@ class ScoreRegressor:
         hidden_dropout_prob: float,
         attention_probs_dropout_prob: float,
         max_length: int,
+        logger
     ):
 
 
@@ -759,6 +760,7 @@ class ScoreRegressor:
         self.data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer
         )
+        self.logger=logger
 
     def concatenate_with_sep_token(self, row):
         sep = " " + self.tokenizer.sep_token + " "        
@@ -790,18 +792,24 @@ class ScoreRegressor:
         )
 
         if CFG.cls_pooling:
+            self.logger('Use CustomTransformerModelV3 with cls_pooling.')
             custom_model = CustomTransformersModelV3(
                 model_content,
                 additional_features_dim=len(self.additional_feature_cols),
                 n_freeze=CFG.n_freeze
             )
         elif CFG.several_layer:
+            self.logger('Use CustomTransformerModelV3 with last 4 transformer layers.')
             custom_model = CustomTransformersModelV2(
                 model_content,
                 additional_features_dim=len(self.additional_feature_cols),
                 n_freeze=CFG.n_freeze
             )
         else:
+            if CFG.mean_pooling:
+                self.logger('Use CustomTransformerModel with mean_pooling.')
+            else:
+                self.logger('Use CustomTransformerModel with CLS token.')
             custom_model = CustomTransformersModel(
                 model_content,
                 additional_features_dim=len(self.additional_feature_cols),
@@ -980,6 +988,7 @@ def train_by_fold(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
+            logger=logger
         )
         
         csr.train(
@@ -1025,6 +1034,7 @@ def validate(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
+            logger=logger
            )
         
         pred_df = csr.predict(
@@ -1070,6 +1080,7 @@ def predict(
             hidden_dropout_prob=hidden_dropout_prob,
             attention_probs_dropout_prob=attention_probs_dropout_prob,
             max_length=max_length,
+            logger=logger
            )
 
         pred_df = csr.predict(
