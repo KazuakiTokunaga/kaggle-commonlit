@@ -878,9 +878,7 @@ class ScoreRegressor:
         torch.save(custom_model.state_dict(), os.path.join(self.model_dir, "model_weight.pth"))
 
         custom_model.cpu()
-        model_content.cpu()
         del custom_model
-        del model_content
         gc.collect()
         torch.cuda.empty_cache()
     
