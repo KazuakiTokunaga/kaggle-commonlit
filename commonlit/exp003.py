@@ -638,7 +638,7 @@ class CustomTransformersModelV2(nn.Module):
             n_freeze = 0, 
             dropout=0.2
         ):
-        super(CustomTransformersModel, self).__init__()
+        super(CustomTransformersModelV2, self).__init__()
         self.base_model = base_model
         self.additional_features_dim = additional_features_dim
         self.dropout = nn.Dropout(dropout)
@@ -677,7 +677,7 @@ class CustomTransformersModelV3(nn.Module):
             n_freeze = 0, 
             dropout=0.2
         ):
-        super(CustomTransformersModel, self).__init__()
+        super(CustomTransformersModelV3, self).__init__()
         self.base_model = base_model
         self.additional_features_dim = additional_features_dim
         self.dropout = nn.Dropout(dropout)
