@@ -1225,8 +1225,12 @@ class Runner():
 
             if RCFG.train:
                 self.train = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_train_data_file}", nrows=nrows)
+                if 'grade' in self.train.columns:
+                    self.train['grade'] = self.train['grade'].astype('category')
             if RCFG.predict:
                 self.test = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_test_data_file}")
+                if 'grade' in self.test.columns:
+                    self.test['grade'] = self.test['grade'].astype('category')
                 
             return None
 
