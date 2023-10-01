@@ -139,6 +139,7 @@ class RCFG:
     use_lgbm: bool = False
     scaling: bool = False
     join_metadata: bool = True
+    wandb_api_key: Optional[str] = None
 
 class Logger:
 
