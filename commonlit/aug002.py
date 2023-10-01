@@ -94,6 +94,8 @@ class Runner():
     def load_dataset(self):
 
         self.train = pd.read_csv(RCFG.use_train_data_file)
+        if RCFG.debug:
+            self.train = self.train.head(RCFG.debug_size)
 
     def translate(self):
 
