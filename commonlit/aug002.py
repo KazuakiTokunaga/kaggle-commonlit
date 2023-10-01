@@ -5,24 +5,12 @@ import warnings
 import logging
 import os
 import random
-import pickle
-import shutil
-import subprocess
 import json
 import datetime
 from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
 from tqdm import tqdm
 
 import torch
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.tokenize.treebank import TreebankWordDetokenizer
-from collections import Counter
-import spacy
-import re
-from autocorrect import Speller
-from spellchecker import SpellChecker
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 import nlpaug.augmenter.word as naw
