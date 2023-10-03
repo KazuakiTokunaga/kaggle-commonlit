@@ -830,7 +830,7 @@ class ScoreRegressor:
             evaluation_strategy="steps",
             eval_steps=save_steps,
             save_steps=save_steps,
-            metric_for_best_model="mcrmse",
+            metric_for_best_model="rmse",
             fp16=True,
             save_total_limit=1
             # gradient_checkpointing=True
@@ -990,7 +990,7 @@ def validate(
             
             valid_data = train_df[train_df["fold"] == fold]
             
-            model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
+            model_dir =  f"{RCFG.model_dir}/{model_name}/{target}/fold_{fold}"
             
             csr = ScoreRegressor(
                 model_name=model_name,
@@ -1037,7 +1037,7 @@ def predict(
         for fold in range(CFG.n_splits):
             logger.info(f"fold {fold}:")
             
-            model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
+            model_dir =  f"{RCFG.model_dir}/{model_name}/{target}/fold_{fold}"
             logger.info(f'prediction model dir: {model_dir}.')
 
             csr = ScoreRegressor(
