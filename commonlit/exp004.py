@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import numpy as np 
 import pandas as pd 
 import warnings
@@ -57,6 +57,8 @@ class CFG:
     max_length: int =512
     n_freeze: int=4
     mean_pooling: bool=False
+    several_layer: bool=False
+    cls_pooling: bool=False
     additional_features: bool=True
 
 class RCFG:
@@ -75,6 +77,7 @@ class RCFG:
     aug_data_dir: str = "/kaggle/input/commonlit-aug-data/"
     gensim_bin_model_path: str = "/kaggle/input/googlenewsvectorsnegative300/GoogleNews-vectors-negative300.bin"
     metadata_path: str = "/kaggle/input/commonlit-text-metadata/prompt_grade_simple.csv"
+    lgbm_model_dir: Optional[str] = None
     aug_data_list: [
         "back_translation_Hel_fr"
     ]
@@ -136,6 +139,7 @@ class RCFG:
     use_lgbm: bool = False
     scaling: bool = False
     join_metadata: bool = True
+    wandb_api_key: Optional[str] = None
 
 class Logger:
 
@@ -512,16 +516,6 @@ class Preprocessor:
         input_df['punctuation_sum'] = input_df['punctuation_ratios'].apply(lambda x: np.sum(list(x.values())))
 
         df_features = input_df[RCFG.additional_features].copy()
-        
-        if RCFG.scaling:
-            if mode == 'train':
-                scaler = StandardScaler()
-                input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
-                dump(scaler, open(f"{RCFG.model_dir}/scaler.pkl", "wb"))
-            else:
-                scaler = load(open(f"{RCFG.model_dir}/scaler.pkl", "rb"))
-                input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
-
 
         return input_df.drop(columns=["summary_tokens", "prompt_length", "pos_ratios", "punctuation_ratios"])
 
@@ -566,7 +560,7 @@ class RMSELoss(nn.Module):
         return loss
 
 class MCRMSELoss(nn.Module):
-    def __init__(self, num_scored=2):
+    def __init__(self, num_scored=1):
         super().__init__()
         self.rmse = RMSELoss()
         self.num_scored = num_scored
@@ -578,34 +572,20 @@ class MCRMSELoss(nn.Module):
 
         return score
 
+# dropout食わせるべき？
 class CustomTransformersModel(nn.Module):
     def __init__(
             self, 
             base_model, 
-            num_labels, 
             additional_features_dim, 
             n_freeze = 0, 
-            hidden_units=200, 
             dropout=0.2
         ):
         super(CustomTransformersModel, self).__init__()
         self.base_model = base_model
         self.additional_features_dim = additional_features_dim
         self.dropout = nn.Dropout(dropout)
-
-        if CFG.additional_features:
-            self.classifier = nn.Sequential(
-                nn.Dropout(dropout),
-                nn.Linear(
-                    base_model.config.hidden_size + additional_features_dim, 
-                    hidden_units,
-                ),
-                nn.ReLU(inplace=True),
-                nn.Dropout(dropout),
-                nn.Linear(hidden_units, num_labels)
-            )
-        else:
-            self.classifier = nn.Linear(base_model.config.hidden_size, 2)
+        self.classifier = nn.Linear(base_model.config.hidden_size, 1)
 
         # freezing embeddings layer
         if n_freeze:
@@ -618,32 +598,118 @@ class CustomTransformersModel(nn.Module):
 
         self.creterion = MCRMSELoss()
 
-    def forward(self, input_ids, features=None, attention_mask=None, labels=None):
+    def forward(self, input_ids, attention_mask=None, labels=None):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
 
+        last_hidden_state = outputs[0]
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+
         if CFG.mean_pooling:
-            # mean pooling
-            last_hidden_state = outputs[0]
-            input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
             sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
             sum_mask = input_mask_expanded.sum(1)
             sum_mask = torch.clamp(sum_mask, min=1e-9)
             base_model_output = sum_embeddings / sum_mask
         else:
-            # use CLS token
             base_model_output = outputs[0][:, 0, :]
         
-        if CFG.additional_features:
-            logits = self.classifier(torch.cat((base_model_output, features), 1))
-        else:
-            logits = self.classifier(base_model_output)
+        logits = self.classifier(base_model_output)
 
         if labels is not None:
             loss = self.creterion(logits, labels)
             return {"loss": loss, "logits": logits}
 
         return {"logits": logits}
-    
+
+# several layer
+class CustomTransformersModelV2(nn.Module):
+    def __init__(
+            self, 
+            base_model, 
+            additional_features_dim, 
+            n_freeze = 0, 
+            dropout=0.2
+        ):
+        super(CustomTransformersModelV2, self).__init__()
+        self.base_model = base_model
+        self.additional_features_dim = additional_features_dim
+        self.dropout = nn.Dropout(dropout)
+        self.classifier = nn.Linear(base_model.config.hidden_size*4, 1)
+
+        # freezing embeddings layer
+        if n_freeze:
+            self.base_model.embeddings.requires_grad_(False)
+        
+            #freezing the initial N layers
+            for i in range(0, n_freeze, 1):
+                for n,p in self.base_model.encoder.layer[i].named_parameters():
+                    p.requires_grad = False
+
+        self.creterion = MCRMSELoss()
+
+    def forward(self, input_ids, attention_mask=None, labels=None):
+        outputs = self.base_model(input_ids, attention_mask=attention_mask)
+        base_model_output = torch.cat(outputs.hidden_states[-4:], 2)[:, 0, :]
+        
+        logits = self.classifier(base_model_output)
+
+        if labels is not None:
+            loss = self.creterion(logits, labels)
+            return {"loss": loss, "logits": logits}
+
+        return {"logits": logits}
+
+
+# cls_plooling
+class CustomTransformersModelV3(nn.Module):
+    def __init__(
+            self, 
+            base_model, 
+            additional_features_dim, 
+            n_freeze = 0, 
+            dropout=0.2
+        ):
+        super(CustomTransformersModelV3, self).__init__()
+        self.base_model = base_model
+        self.additional_features_dim = additional_features_dim
+        self.dropout = nn.Dropout(dropout)
+        self.classifier = nn.Linear(base_model.config.hidden_size*3, 1)
+
+        # freezing embeddings layer
+        if n_freeze:
+            self.base_model.embeddings.requires_grad_(False)
+        
+            #freezing the initial N layers
+            for i in range(0, n_freeze, 1):
+                for n,p in self.base_model.encoder.layer[i].named_parameters():
+                    p.requires_grad = False
+
+        self.creterion = MCRMSELoss()
+
+    def forward(self, input_ids, attention_mask=None, labels=None):
+        outputs = self.base_model(input_ids, attention_mask=attention_mask)
+
+        last_hidden_state = outputs[0]
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+        sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
+        sum_mask = input_mask_expanded.sum(1)
+        sum_mask = torch.clamp(sum_mask, min=1e-9)
+        mean_pooling = sum_embeddings / sum_mask
+
+        mask = (1 - input_mask_expanded)
+        hidden_state = last_hidden_state - mask * 1e3
+        max_pooling =  torch.max(hidden_state, 1)[0]
+
+        cls = last_hidden_state[:, 0, :]
+
+        base_model_output = torch.cat((mean_pooling, max_pooling, cls), 1)
+
+        logits = self.classifier(base_model_output)
+
+        if labels is not None:
+            loss = self.creterion(logits, labels)
+            return {"loss": loss, "logits": logits}
+
+        return {"logits": logits}
 
 
 class ScoreRegressor:
@@ -652,16 +718,17 @@ class ScoreRegressor:
         model_name: str,
         model_dir: str,
         inputs: List[str],
-        target_cols: List[str],
+        target: str,
         hidden_dropout_prob: float,
         attention_probs_dropout_prob: float,
         max_length: int,
+        logger
     ):
 
 
         self.input_col = "input"        
         self.input_text_cols = inputs 
-        self.target_cols = target_cols
+        self.target = target
         self.additional_feature_cols = RCFG.additional_features
 
         self.model_name = model_name
@@ -674,8 +741,9 @@ class ScoreRegressor:
         self.model_config.update({
             "hidden_dropout_prob": hidden_dropout_prob,
             "attention_probs_dropout_prob": attention_probs_dropout_prob,
-            "num_labels": 2,
+            "num_labels": 1,
             "problem_type": "regression",
+            "output_hidden_states": True
         })
         
         seed_everything(seed=42)
@@ -683,22 +751,21 @@ class ScoreRegressor:
         self.data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer
         )
+        self.logger=logger
 
     def concatenate_with_sep_token(self, row):
         sep = " " + self.tokenizer.sep_token + " "        
         return sep.join(row[self.input_text_cols])
 
     def tokenize_function(self, examples: pd.DataFrame):
-        labels = [examples["content"], examples["wording"]]
-        features = examples['features']
+        labels = [examples[self.target]]
         tokenized = self.tokenizer(examples[self.input_col],
                         padding="max_length",
                         truncation=True,
                         max_length=self.max_length)
         return {
             **tokenized,
-            "labels": labels,
-            "features": features
+            "labels": labels
         }
     
     def tokenize_function_test(self, examples: pd.DataFrame):
@@ -706,13 +773,42 @@ class ScoreRegressor:
                         padding="max_length",
                         truncation=True,
                         max_length=self.max_length)
-        features = examples['features']
-        return {
-            **tokenized,
-            "features": features
-        }
-                
-        
+        return tokenized
+    
+    def get_custom_model(self, ):
+
+        model_content = AutoModel.from_pretrained(
+            f"{RCFG.base_model_dir}", 
+            config=self.model_config
+        )
+
+        if CFG.cls_pooling:
+            self.logger.info('Use CustomTransformerModelV3 with cls_pooling.')
+            custom_model = CustomTransformersModelV3(
+                model_content,
+                additional_features_dim=len(self.additional_feature_cols),
+                n_freeze=CFG.n_freeze
+            )
+        elif CFG.several_layer:
+            self.logger.info('Use CustomTransformerModelV3 with last 4 transformer layers.')
+            custom_model = CustomTransformersModelV2(
+                model_content,
+                additional_features_dim=len(self.additional_feature_cols),
+                n_freeze=CFG.n_freeze
+            )
+        else:
+            if CFG.mean_pooling:
+                self.logger.info('Use CustomTransformerModel with mean_pooling.')
+            else:
+                self.logger.info('Use CustomTransformerModel with CLS token.')
+            custom_model = CustomTransformersModel(
+                model_content,
+                additional_features_dim=len(self.additional_feature_cols),
+                n_freeze=CFG.n_freeze
+            )
+
+        return custom_model
+
     def train(
         self, 
         fold: int,
@@ -729,23 +825,10 @@ class ScoreRegressor:
         train_df[self.input_col] = train_df.apply(self.concatenate_with_sep_token, axis=1)
         valid_df[self.input_col] = valid_df.apply(self.concatenate_with_sep_token, axis=1) 
         
-        train_df['features'] = train_df[self.additional_feature_cols].to_numpy().tolist()
-        valid_df['features'] = valid_df[self.additional_feature_cols].to_numpy().tolist()
-        train_df = train_df[[self.input_col] + ['features'] + self.target_cols]
-        valid_df = valid_df[[self.input_col] + ['features'] +  self.target_cols]
-
+        train_df = train_df[[self.input_col] + [self.target]]
+        valid_df = valid_df[[self.input_col] + [self.target]]
         
-        model_content = AutoModel.from_pretrained(
-            f"{RCFG.base_model_dir}", 
-            config=self.model_config
-        )
-
-        custom_model = CustomTransformersModel(
-            model_content, 
-            num_labels=2, 
-            additional_features_dim=len(self.additional_feature_cols),
-            n_freeze=CFG.n_freeze
-        )
+        custom_model = self.get_custom_model()
 
         train_dataset = Dataset.from_pandas(train_df, preserve_index=False) 
         val_dataset = Dataset.from_pandas(valid_df, preserve_index=False) 
@@ -794,9 +877,7 @@ class ScoreRegressor:
         torch.save(custom_model.state_dict(), os.path.join(self.model_dir, "model_weight.pth"))
 
         custom_model.cpu()
-        model_content.cpu()
         del custom_model
-        del model_content
         gc.collect()
         torch.cuda.empty_cache()
     
@@ -809,30 +890,12 @@ class ScoreRegressor:
         """predict content score"""
         
         test_df[self.input_col] = test_df.apply(self.concatenate_with_sep_token, axis=1)
-
-        test_df['features'] = test_df[self.additional_feature_cols].fillna(0).to_numpy().tolist()
-        test_df = test_df[[self.input_col] + ['features']]
+        test_df = test_df[[self.input_col]]
 
         test_dataset = Dataset.from_pandas(test_df, preserve_index=False) 
         test_tokenized_dataset = test_dataset.map(self.tokenize_function_test, batched=False)
 
-        model_content = AutoModel.from_pretrained(
-            f"{RCFG.base_model_dir}", 
-            config=self.model_config
-        )
-        custom_model = CustomTransformersModel(
-            model_content, 
-            num_labels=2, 
-            additional_features_dim=len(self.additional_feature_cols),
-            n_freeze=CFG.n_freeze
-        )
-
-        model_content.cpu()
-        del model_content
-        gc.collect()
-        torch.cuda.empty_cache()
-        
-        # time.sleep(3600)
+        custom_model = self.get_custom_model()
         custom_model.load_state_dict(torch.load(os.path.join(self.model_dir, "model_weight.pth")))
         custom_model.eval()
         
@@ -855,13 +918,7 @@ class ScoreRegressor:
         )
 
         preds = infer_content.predict(test_tokenized_dataset)[0]
-        pred_df = pd.DataFrame(
-                    preds, 
-                    columns=[
-                        f"content_pred", 
-                        f"wording_pred"
-                    ]
-                )
+        pred_df = pd.DataFrame(preds, columns=[f"{self.target}_pred"])
         
         custom_model.cpu()
         del custom_model
@@ -895,41 +952,45 @@ def train_by_fold(
     if os.path.exists(model_dir):
         shutil.rmtree(model_dir)
     os.makedirs(model_dir)
-        
-    for fold in range(CFG.n_splits):
-        logger.info(f"fold {fold}:")
-        
-        train_data = train_df[train_df["fold"] != fold]
-        valid_data = train_df[train_df["fold"] == fold]
 
-        if RCFG.use_aug_data: 
-            logger.info('Augment data by back translation.')
-            train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
-            train_data = pd.concat([train_data, train_aug_data])
-        
-        fold_model_dir = f'{model_dir}/fold_{fold}'
-        csr = ScoreRegressor(
-            model_name=model_name,
-            target_cols=targets,
-            inputs= inputs,
-            model_dir = fold_model_dir, 
-            hidden_dropout_prob=hidden_dropout_prob,
-            attention_probs_dropout_prob=attention_probs_dropout_prob,
-            max_length=max_length,
-        )
-        
-        csr.train(
-            fold=fold,
-            train_df=train_data,
-            valid_df=valid_data, 
-            batch_size=batch_size,
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            num_train_epochs=num_train_epochs,
-            save_steps=save_steps,
-        )
+    for target in targets:
+        logger.info(f'target: {target}.')
 
-        print_gpu_utilization(logger)
+        for fold in range(CFG.n_splits):
+            logger.info(f"fold {fold}:")
+            
+            train_data = train_df[train_df["fold"] != fold]
+            valid_data = train_df[train_df["fold"] == fold]
+
+            if RCFG.use_aug_data: 
+                logger.info('Augment data by back translation.')
+                train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
+                train_data = pd.concat([train_data, train_aug_data])
+            
+            fold_model_dir = f'{model_dir}/{target}/fold_{fold}'
+            csr = ScoreRegressor(
+                model_name=model_name,
+                target=target,
+                inputs= inputs,
+                model_dir = fold_model_dir, 
+                hidden_dropout_prob=hidden_dropout_prob,
+                attention_probs_dropout_prob=attention_probs_dropout_prob,
+                max_length=max_length,
+                logger=logger
+            )
+            
+            csr.train(
+                fold=fold,
+                train_df=train_data,
+                valid_df=valid_data, 
+                batch_size=batch_size,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                num_train_epochs=num_train_epochs,
+                save_steps=save_steps,
+            )
+
+            print_gpu_utilization(logger)
 
 def validate(
     logger,
@@ -946,30 +1007,33 @@ def validate(
 
     columns = list(train_df.columns.values)
     
-    for fold in range(CFG.n_splits):
-        logger.info(f"fold {fold}:")
-        
-        valid_data = train_df[train_df["fold"] == fold]
-        
-        model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
-        
-        csr = ScoreRegressor(
-            model_name=model_name,
-            target_cols=targets,
-            inputs= inputs,
-            model_dir = model_dir,
-            hidden_dropout_prob=hidden_dropout_prob,
-            attention_probs_dropout_prob=attention_probs_dropout_prob,
-            max_length=max_length,
-           )
-        
-        pred_df = csr.predict(
-            test_df=valid_data, 
-            batch_size=batch_size
-        )
+    for target in targets:
+        logger.info(f'target: {target}.')
 
-        train_df.loc[valid_data.index, f"content_pred"] = pred_df[f"content_pred"].values
-        train_df.loc[valid_data.index, f"wording_pred"] = pred_df[f"wording_pred"].values
+        for fold in range(CFG.n_splits):
+            logger.info(f"fold {fold}:")
+            
+            valid_data = train_df[train_df["fold"] == fold]
+            
+            model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
+            
+            csr = ScoreRegressor(
+                model_name=model_name,
+                target=target,
+                inputs= inputs,
+                model_dir = model_dir,
+                hidden_dropout_prob=hidden_dropout_prob,
+                attention_probs_dropout_prob=attention_probs_dropout_prob,
+                max_length=max_length,
+                logger=logger
+            )
+            
+            pred_df = csr.predict(
+                test_df=valid_data, 
+                batch_size=batch_size
+            )
+
+            train_df.loc[valid_data.index, f"{target}_pred"] = pred_df[f"{target}_pred"].values
                 
     for target_pred in ["content_pred", "wording_pred"]:
         if target_pred not in columns: columns.append(target_pred)
@@ -992,36 +1056,38 @@ def predict(
     
     columns = list(test_df.columns.values)
 
-    for fold in range(CFG.n_splits):
-        logger.info(f"fold {fold}:")
-        
-        model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
-        logger.info(f'prediction model dir: {model_dir}.')
+    for target in targets:
+        logger.info(f'target: {target}.')
 
-        csr = ScoreRegressor(
-            model_name=model_name,
-            target_cols=targets,
-            inputs= inputs,
-            model_dir = model_dir, 
-            hidden_dropout_prob=hidden_dropout_prob,
-            attention_probs_dropout_prob=attention_probs_dropout_prob,
-            max_length=max_length,
-           )
+        for fold in range(CFG.n_splits):
+            logger.info(f"fold {fold}:")
+            
+            model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
+            logger.info(f'prediction model dir: {model_dir}.')
 
-        pred_df = csr.predict(
-            test_df=test_df, 
-            batch_size=batch_size
-        )
+            csr = ScoreRegressor(
+                model_name=model_name,
+                target=target,
+                inputs= inputs,
+                model_dir = model_dir, 
+                hidden_dropout_prob=hidden_dropout_prob,
+                attention_probs_dropout_prob=attention_probs_dropout_prob,
+                max_length=max_length,
+                logger=logger
+            )
 
-        del csr
-        gc.collect()
-        torch.cuda.empty_cache()
+            pred_df = csr.predict(
+                test_df=test_df, 
+                batch_size=batch_size
+            )
 
-        test_df[f"content_pred_{fold}"] = pred_df[f"content_pred"].values
-        test_df[f"wording_pred_{fold}"] = pred_df[f"wording_pred"].values
+            del csr
+            gc.collect()
+            torch.cuda.empty_cache()
 
-    test_df[f"content_pred"] = test_df[[f"content_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
-    test_df[f"wording_pred"] = test_df[[f"wording_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+            test_df[f"{target}_pred_{fold}"] = pred_df[f"{target}_pred"].values
+
+        test_df[f"{target}_pred"] = test_df[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
 
     for target_pred in ["content_pred", "wording_pred"]:
         if target_pred not in columns: columns.append(target_pred)
@@ -1073,6 +1139,9 @@ class Runner():
         self.lgbm_columns = RCFG.additional_features + ["content_pred", "wording_pred"]
 
         self.data_to_write = []
+
+        if RCFG.lgbm_model_dir is None:
+            RCFG.lgbm_model_dir = RCFG.model_dir
 
         if RCFG.save_to_sheet:
             self.logger.info('Initializing Google Sheet.')
@@ -1147,8 +1216,12 @@ class Runner():
 
             if RCFG.train:
                 self.train = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_train_data_file}", nrows=nrows)
+                if 'grade' in self.train.columns:
+                    self.train['grade'] = self.train['grade'].astype('category')
             if RCFG.predict:
                 self.test = pd.read_csv(f"{RCFG.preprocessed_dataset_path}/{RCFG.use_test_data_file}")
+                if 'grade' in self.test.columns:
+                    self.test['grade'] = self.test['grade'].astype('category')
                 
             return None
 
@@ -1329,7 +1402,7 @@ class Runner():
 
 
         # delete old model files
-        model_dir = f'{RCFG.model_dir}/gbtmodel'
+        model_dir = f'{RCFG.lgbm_model_dir}/gbtmodel'
         if os.path.exists(model_dir):
             shutil.rmtree(model_dir)
         os.makedirs(model_dir)
@@ -1356,7 +1429,7 @@ class Runner():
 
 
         self.logger.info('Start creating submission data using LGBM.')
-        with open(f'{RCFG.model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
+        with open(f'{RCFG.lgbm_model_dir}/gbtmodel/model_dict.pkl', 'rb') as f:
             self.model_dict = pickle.load(f)
 
         pred_dict = {}
