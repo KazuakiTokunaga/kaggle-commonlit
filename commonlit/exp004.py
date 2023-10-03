@@ -98,8 +98,7 @@ class RCFG:
      }
     additional_features = [
         "summary_length", 
-        "splling_err_num", 
-        "length_ratio",
+        "splling_err_num",
         "word_overlap_count",
         "bigram_overlap_count",
         "bigram_overlap_ratio",
@@ -526,29 +525,6 @@ def compute_metrics(eval_pred):
     return {"rmse": rmse}
 
 
-def compute_mcrmse(eval_pred):
-    """
-    Calculates mean columnwise root mean squared error
-    https://www.kaggle.com/competitions/commonlit-evaluate-student-summaries/overview/evaluation
-    """
-    preds, labels = eval_pred
-
-    col_rmse = np.sqrt(np.mean((preds - labels) ** 2, axis=0))
-    mcrmse = np.mean(col_rmse)
-
-    return {
-        "content_rmse": col_rmse[0],
-        "wording_rmse": col_rmse[1],
-        "mcrmse": mcrmse,
-    }
-
-def compt_score(content_true, content_pred, wording_true, wording_pred):
-    content_score = mean_squared_error(content_true, content_pred)**(1/2)
-    wording_score = mean_squared_error(wording_true, wording_pred)**(1/2)
-    
-    return (content_score + wording_score)/2
-
-
 class RMSELoss(nn.Module):
     def __init__(self, eps=1e-6):
         super().__init__()
@@ -572,7 +548,6 @@ class MCRMSELoss(nn.Module):
 
         return score
 
-# dropout食わせるべき？
 class CustomTransformersModel(nn.Module):
     def __init__(
             self, 
@@ -867,7 +842,7 @@ class ScoreRegressor:
             train_dataset=train_tokenized_datasets,
             eval_dataset=val_tokenized_datasets,
             tokenizer=self.tokenizer,
-            compute_metrics=compute_mcrmse,
+            compute_metrics=compute_metrics,
             data_collator=self.data_collator
         )
 
