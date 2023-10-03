@@ -99,7 +99,6 @@ class RCFG:
     additional_features = [
         "summary_length", 
         "splling_err_num", 
-        "length_ratio",
         "word_overlap_count",
         "bigram_overlap_count",
         "bigram_overlap_ratio",
