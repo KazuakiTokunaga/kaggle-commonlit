@@ -60,6 +60,7 @@ class CFG:
     several_layer: bool=False
     cls_pooling: bool=False
     additional_features: bool=True
+    automodel: bool = False
 
 class RCFG:
     run_name: str = 'run'
