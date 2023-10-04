@@ -665,8 +665,7 @@ class ScoreRegressor:
             "hidden_dropout_prob": hidden_dropout_prob,
             "attention_probs_dropout_prob": attention_probs_dropout_prob,
             "num_labels": 1,
-            "problem_type": "regression",
-            "output_hidden_states": True
+            "problem_type": "regression"
         })
         
         seed_everything(seed=42)
@@ -683,7 +682,7 @@ class ScoreRegressor:
     def tokenize_function(self, examples: pd.DataFrame):
         labels = [examples[self.target]]
         tokenized = self.tokenizer(examples[self.input_col],
-                        padding="max_length",
+                        padding=False,
                         truncation=True,
                         max_length=self.max_length)
         return {
@@ -693,7 +692,7 @@ class ScoreRegressor:
     
     def tokenize_function_test(self, examples: pd.DataFrame):
         tokenized = self.tokenizer(examples[self.input_col],
-                        padding="max_length",
+                        padding=False,
                         truncation=True,
                         max_length=self.max_length)
         return tokenized
