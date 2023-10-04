@@ -666,8 +666,12 @@ class ScoreRegressor:
             "attention_probs_dropout_prob": attention_probs_dropout_prob,
             "num_labels": 1,
             "problem_type": "regression"
-            # "output_hidden_states": True
         })
+
+        if CFG.several_layer:
+            self.model_config.update({
+                "output_hidden_states": True
+            })
         
         seed_everything(seed=42)
 
