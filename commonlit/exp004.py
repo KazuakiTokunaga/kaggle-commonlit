@@ -588,7 +588,7 @@ class CustomTransformersModel(nn.Module):
         else:
             base_model_output = outputs[0][:, 0, :]
         
-        logits = self.classifier(base_model_output)
+        logits = self.classifier(self.dropout(base_model_output))
 
         if labels is not None:
             loss = self.creterion(logits, labels)
@@ -626,60 +626,7 @@ class CustomTransformersModelV2(nn.Module):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
         base_model_output = torch.cat(outputs.hidden_states[-4:], 2)[:, 0, :]
         
-        logits = self.classifier(base_model_output)
-
-        if labels is not None:
-            loss = self.creterion(logits, labels)
-            return {"loss": loss, "logits": logits}
-
-        return {"logits": logits}
-
-
-# cls_plooling
-class CustomTransformersModelV3(nn.Module):
-    def __init__(
-            self, 
-            base_model, 
-            additional_features_dim, 
-            n_freeze = 0, 
-            dropout=0.2
-        ):
-        super(CustomTransformersModelV3, self).__init__()
-        self.base_model = base_model
-        self.additional_features_dim = additional_features_dim
-        self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(base_model.config.hidden_size*3, 1)
-
-        # freezing embeddings layer
-        if n_freeze:
-            self.base_model.embeddings.requires_grad_(False)
-        
-            #freezing the initial N layers
-            for i in range(0, n_freeze, 1):
-                for n,p in self.base_model.encoder.layer[i].named_parameters():
-                    p.requires_grad = False
-
-        self.creterion = MCRMSELoss()
-
-    def forward(self, input_ids, attention_mask=None, labels=None):
-        outputs = self.base_model(input_ids, attention_mask=attention_mask)
-
-        last_hidden_state = outputs[0]
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
-        sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
-        sum_mask = input_mask_expanded.sum(1)
-        sum_mask = torch.clamp(sum_mask, min=1e-9)
-        mean_pooling = sum_embeddings / sum_mask
-
-        mask = (1 - input_mask_expanded)
-        hidden_state = last_hidden_state - mask * 1e3
-        max_pooling =  torch.max(hidden_state, 1)[0]
-
-        cls = last_hidden_state[:, 0, :]
-
-        base_model_output = torch.cat((mean_pooling, max_pooling, cls), 1)
-
-        logits = self.classifier(base_model_output)
+        logits = self.classifier(self.dropout(base_model_output))
 
         if labels is not None:
             loss = self.creterion(logits, labels)
@@ -758,14 +705,7 @@ class ScoreRegressor:
             config=self.model_config
         )
 
-        if CFG.cls_pooling:
-            self.logger.info('Use CustomTransformerModelV3 with cls_pooling.')
-            custom_model = CustomTransformersModelV3(
-                model_content,
-                additional_features_dim=len(self.additional_feature_cols),
-                n_freeze=CFG.n_freeze
-            )
-        elif CFG.several_layer:
+        if CFG.several_layer:
             self.logger.info('Use CustomTransformerModelV3 with last 4 transformer layers.')
             custom_model = CustomTransformersModelV2(
                 model_content,
