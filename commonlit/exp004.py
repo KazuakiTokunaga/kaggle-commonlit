@@ -683,7 +683,7 @@ class ScoreRegressor:
     def tokenize_function(self, examples: pd.DataFrame):
         labels = [examples[self.target]]
         tokenized = self.tokenizer(examples[self.input_col],
-                        padding="max_length",
+                        padding=False,
                         truncation=True,
                         max_length=self.max_length)
         return {
@@ -693,7 +693,7 @@ class ScoreRegressor:
     
     def tokenize_function_test(self, examples: pd.DataFrame):
         tokenized = self.tokenizer(examples[self.input_col],
-                        padding="max_length",
+                        padding=False,
                         truncation=True,
                         max_length=self.max_length)
         return tokenized
