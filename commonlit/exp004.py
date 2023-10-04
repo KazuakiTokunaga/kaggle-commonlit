@@ -555,7 +555,7 @@ class CustomTransformersModel(nn.Module):
             base_model, 
             additional_features_dim, 
             n_freeze = 0, 
-            dropout=0.2
+            dropout=0.1
         ):
         super(CustomTransformersModel, self).__init__()
         self.base_model = base_model
@@ -603,7 +603,7 @@ class CustomTransformersModelV2(nn.Module):
             base_model, 
             additional_features_dim, 
             n_freeze = 0, 
-            dropout=0.2
+            dropout=0.1
         ):
         super(CustomTransformersModelV2, self).__init__()
         self.base_model = base_model
