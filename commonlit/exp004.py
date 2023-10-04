@@ -771,6 +771,12 @@ class ScoreRegressor:
                 additional_features_dim=len(self.additional_feature_cols),
                 n_freeze=CFG.n_freeze
             )
+        elif CFG.automodel:
+            self.logger.info('Use AutoModelForSequenceClassification.')
+            custom_model = AutoModelForSequenceClassification.from_pretrained(
+                f"{RCFG.base_model_dir}", 
+                config=self.model_config
+            )
         else:
             if CFG.mean_pooling:
                 self.logger.info('Use CustomTransformerModel with mean_pooling.')
