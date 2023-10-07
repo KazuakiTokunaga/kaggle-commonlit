@@ -888,7 +888,7 @@ def train_by_fold(
             train_data = train_df[train_df["fold"] != fold]
             valid_data = train_df[train_df["fold"] == fold]
 
-            if RCFG.use_aug_data: 
+            if RCFG.use_aug_data and target == 'content': 
                 logger.info('Augment data by back translation.')
                 train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
                 train_data = pd.concat([train_data, train_aug_data])
