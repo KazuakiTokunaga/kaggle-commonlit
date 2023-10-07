@@ -829,7 +829,7 @@ class ScoreRegressor:
             output_dir=".",
             do_train = False,
             do_predict = True,
-            per_device_eval_batch_size=1,
+            per_device_eval_batch_size=12,
             dataloader_drop_last = False,
             fp16=True,
             save_strategy="no"
@@ -1165,6 +1165,8 @@ class Runner():
             del self.prompts_test
             del self.summaries_test
             gc.collect()
+
+            self.test.to_csv('test_preprocessed.csv', index=False)
         
         del preprocessor
         gc.collect()
@@ -1248,7 +1250,8 @@ class Runner():
                 max_length=CFG.max_length
             )
 
-
+            id = RCFG.model_dir[-2:]
+            self.test[['student_id', 'content_pred', 'wording_pred']].to_csv(f'{id}_tmp.csv', index=False) 
             print_gpu_utilization(self.logger)
         
         if RCFG.train:
