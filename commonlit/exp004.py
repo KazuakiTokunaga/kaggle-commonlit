@@ -1333,10 +1333,7 @@ class Runner():
                         RCFG.xgb_params,
                         num_boost_round=10000,
                         evals=[(dtrain, 'train'), (dval, 'valid')],
-                        callbacks=[
-                            xgb.callback.EarlyStopping(30),
-                            xgb.callback.record_evaluation(evaluation_results)
-                        ],
+                        early_stopping_rounds=30
                     )
                     models.append(model)
                 
