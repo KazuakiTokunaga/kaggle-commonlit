@@ -1331,9 +1331,9 @@ class Runner():
                 
                 preds.append(preds_tmp)
             
-            preds = np.array(preds_tmp).mean(axis=0)
+            preds_mean = np.array(preds).mean(axis=0)
                 
-            rmse = np.sqrt(mean_squared_error(trues, preds))
+            rmse = np.sqrt(mean_squared_error(trues, preds_mean))
             self.logger.info(f"{target}_rmse : {rmse}")
             self.data_to_write.append(rmse)
             rmses = rmses + [rmse]
@@ -1390,8 +1390,8 @@ class Runner():
 
                 preds.append(preds_tmp)
             
-            preds = np.array(preds_tmp).mean(axis=0)
-            pred_dict[target] = preds
+            preds_mean = np.array(preds).mean(axis=0)
+            pred_dict[target] = preds_mean
 
         for target in self.targets:
             preds = pred_dict[target]
