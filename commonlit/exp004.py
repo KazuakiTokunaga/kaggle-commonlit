@@ -87,6 +87,8 @@ class RCFG:
     sheet_key: str = '1LhmdqSXborxoP1Pwb1ly-UO_DTfGSfXDN25ZS5MkvHI'
     kaggle_dataset_title: str = "commonlit-models"
     input_cols: List[str] = ["prompt_title", "prompt_question", "fixed_summary_text"]
+    lgbm_repeat_cnt: int = 5
+    random_seed_list: List[int] = [42, 83, 120, 2203, 1023]
     lgbm_params = {
         'boosting_type': 'gbdt',
         'random_state': 42,
@@ -1272,53 +1274,61 @@ class Runner():
         for target in self.targets:
             self.logger.info(f'Start training LGBM model: {target}')
 
-            models = []
-            for fold in range(CFG.n_splits):
+            # repeat 5 times chaning random seed
+            for i in range(RCFG.lgbm_repeat_cnt):
+                RCFG.lgbm_params['random_state'] = RCFG.random_seed_list[i]
 
-                X_train_cv = self.train[self.train["fold"] != fold][self.lgbm_columns]
-                y_train_cv = self.train[self.train["fold"] != fold][target]
+                models = []
+                for fold in range(CFG.n_splits):
 
-                X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
-                y_eval_cv = self.train[self.train["fold"] == fold][target]
+                    X_train_cv = self.train[self.train["fold"] != fold][self.lgbm_columns]
+                    y_train_cv = self.train[self.train["fold"] != fold][target]
 
-                dtrain = lgb.Dataset(X_train_cv, label=y_train_cv)
-                dval = lgb.Dataset(X_eval_cv, label=y_eval_cv)
+                    X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
+                    y_eval_cv = self.train[self.train["fold"] == fold][target]
 
-                evaluation_results = {}
-                model = lgb.train(
-                    RCFG.lgbm_params,
-                    num_boost_round=10000,
-                    valid_names=['train', 'valid'],
-                    train_set=dtrain,
-                    valid_sets=dval,
-                    callbacks=[
-                        lgb.early_stopping(stopping_rounds=30, verbose=False),
-                        lgb.log_evaluation(-1),
-                        lgb.callback.record_evaluation(evaluation_results)
-                    ],
-                )
-                models.append(model)
+                    dtrain = lgb.Dataset(X_train_cv, label=y_train_cv)
+                    dval = lgb.Dataset(X_eval_cv, label=y_eval_cv)
+
+                    evaluation_results = {}
+                    model = lgb.train(
+                        RCFG.lgbm_params,
+                        num_boost_round=10000,
+                        valid_names=['train', 'valid'],
+                        train_set=dtrain,
+                        valid_sets=dval,
+                        callbacks=[
+                            lgb.early_stopping(stopping_rounds=30, verbose=False),
+                            lgb.log_evaluation(-1),
+                            lgb.callback.record_evaluation(evaluation_results)
+                        ],
+                    )
+                    models.append(model)
             
-            self.model_dict[target] = models
+                self.model_dict[f'{target}_{i}'] = models
 
         # cv
         rmses = []
 
         for target in self.targets:
-            models = self.model_dict[target]
-
-            preds = []
-            trues = []
             
-            for fold, model in enumerate(models):
-                # ilocで取り出す行を指定
-                X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
-                y_eval_cv = self.train[self.train["fold"] == fold][target]
+            preds = []
+            for i in range(RCFG.lgbm_repeat_cnt):
+                models = self.model_dict[f'{target}_{i}']
 
-                pred = model.predict(X_eval_cv)
+                preds_tmp = []
+                trues = []
+                for fold, model in enumerate(models):
+                    # ilocで取り出す行を指定
+                    X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
+                    y_eval_cv = self.train[self.train["fold"] == fold][target]
 
-                trues.extend(y_eval_cv)
-                preds.extend(pred)
+                    pred_tmp = model.predict(X_eval_cv)
+
+                    trues.extend(y_eval_cv)
+                    preds_tmp.extend(pred_tmp)
+            
+            preds = np.array(preds).mean(axis=0)
                 
             rmse = np.sqrt(mean_squared_error(trues, preds))
             self.logger.info(f"{target}_rmse : {rmse}")
@@ -1363,15 +1373,19 @@ class Runner():
 
         pred_dict = {}
         for target in self.targets:
-            models = self.model_dict[target]
-            preds = []
-
-            for fold, model in enumerate(models):
-                X_eval_cv = self.test[self.lgbm_columns]
-
-                pred = model.predict(X_eval_cv)
-                preds.append(pred)
             
+            preds = []
+            for i in range(RCFG.lgbm_repeat_cnt):
+                models = self.model_dict[f'{target}_{i}']
+                
+                preds_tmp = []
+                for fold, model in enumerate(models):
+                    X_eval_cv = self.test[self.lgbm_columns]
+
+                    pred_tmp = model.predict(X_eval_cv)
+                    preds_tmp.append(pred_tmp)
+            
+            preds = np.array(preds_tmp).mean(axis=0)
             pred_dict[target] = preds
 
         for target in self.targets:
