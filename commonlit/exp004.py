@@ -1328,6 +1328,8 @@ class Runner():
 
                     trues.extend(y_eval_cv)
                     preds_tmp.extend(pred_tmp)
+                
+                preds.append(preds_tmp)
             
             preds = np.array(preds_tmp).mean(axis=0)
                 
@@ -1385,6 +1387,8 @@ class Runner():
 
                     pred_tmp = model.predict(X_eval_cv)
                     preds_tmp.append(pred_tmp)
+
+                preds.append(preds_tmp)
             
             preds = np.array(preds_tmp).mean(axis=0)
             pred_dict[target] = preds
