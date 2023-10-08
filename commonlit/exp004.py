@@ -1442,10 +1442,12 @@ class Runner():
 
         for target in self.targets:
             preds = pred_dict[target]
+            cnt = 0
             for i, pred in enumerate(preds):
                 self.test[f"{target}_pred_{i}"] = pred
+                cnt += 1
 
-            self.test[target] = self.test[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+            self.test[target] = self.test[[f"{target}_pred_{fold}" for fold in range(cnt)]].mean(axis=1)
 
         self.test[["student_id", "content", "wording"]].to_csv(filename, index=False)
 
