@@ -1371,10 +1371,8 @@ class Runner():
                     dval = xgb.DMatrix(X_eval_cv, label=y_eval_cv,  enable_categorical=True)
                     pred = model.predict(dval)
 
-                    trues.extend(y_eval_cv)
                     preds_tmp.extend(pred)
                 
-                print(len(preds), len(preds_tmp))
                 preds = np.array([preds, preds_tmp]).mean(axis=0)
                 
             rmse = np.sqrt(mean_squared_error(trues, preds))
