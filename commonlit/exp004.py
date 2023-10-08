@@ -1334,7 +1334,8 @@ class Runner():
                         dtrain,
                         num_boost_round=10000,
                         evals=[(dtrain, 'train'), (dval, 'valid')],
-                        early_stopping_rounds=30
+                        early_stopping_rounds=30,
+                        verbose_eval=False
                     )
                     models.append(model)
                 
