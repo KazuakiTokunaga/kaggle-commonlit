@@ -1334,7 +1334,7 @@ class Runner():
                         num_boost_round=10000,
                         evals=[(dtrain, 'train'), (dval, 'valid')],
                         callbacks=[
-                            xgb.callback.early_stop(30),
+                            xgb.callback.early_stopping(30),
                             xgb.callback.record_evaluation(evaluation_results)
                         ],
                     )
