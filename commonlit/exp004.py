@@ -1330,6 +1330,7 @@ class Runner():
                     preds_tmp.extend(pred_tmp)
                 
                 preds.append(preds_tmp)
+            return preds
             
             preds_mean = np.array(preds).mean(axis=0)
                 
