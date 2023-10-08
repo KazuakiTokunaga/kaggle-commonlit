@@ -1369,7 +1369,7 @@ class Runner():
                     X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
                     y_eval_cv = self.train[self.train["fold"] == fold][target]
 
-                    dval = xgb.DMatrix(X_eval_cv, label=y_eval_cv)
+                    dval = xgb.DMatrix(X_eval_cv, label=y_eval_cv,  enable_categorical=True)
                     pred = model.predict(dval)
 
                     trues.extend(y_eval_cv)
