@@ -1331,6 +1331,7 @@ class Runner():
                     evaluation_results = {}
                     model = xgb.train(
                         RCFG.xgb_params,
+                        dtrain,
                         num_boost_round=10000,
                         evals=[(dtrain, 'train'), (dval, 'valid')],
                         early_stopping_rounds=30
