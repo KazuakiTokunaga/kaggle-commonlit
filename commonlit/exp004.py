@@ -1426,7 +1426,17 @@ class Runner():
 
                 pred = model.predict(X_eval_cv)
                 preds.append(pred)
-            
+
+            if RCFG.xgboost:
+                models = self.model_dict[f'{target}_xgb']
+
+                for fold, model in enumerate(models):
+                    X_eval_cv = self.test[self.lgbm_columns]
+                    dval = xgb.DMatrix(X_eval_cv, enable_categorical=True)
+                    pred = model.predict(dval)
+
+                    preds.append(pred)
+
             pred_dict[target] = preds
 
         for target in self.targets:
