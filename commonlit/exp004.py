@@ -1329,7 +1329,7 @@ class Runner():
                     trues.extend(y_eval_cv)
                     preds_tmp.extend(pred_tmp)
             
-            preds = np.array(preds).mean(axis=0)
+            preds = np.array(preds_tmp).mean(axis=0)
                 
             rmse = np.sqrt(mean_squared_error(trues, preds))
             self.logger.info(f"{target}_rmse : {rmse}")
