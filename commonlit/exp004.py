@@ -1428,6 +1428,7 @@ class Runner():
                 preds.append(pred)
 
             if RCFG.xgboost:
+                self.logger.info(f'Start predicting XGBoost model: {target}')
                 models = self.model_dict[f'{target}_xgb']
 
                 for fold, model in enumerate(models):
