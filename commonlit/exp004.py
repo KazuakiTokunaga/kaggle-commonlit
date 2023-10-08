@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import json
 import time
+import xgboost as xgb
 from textblob import TextBlob
 import datetime
 from pickle import dump, load
@@ -97,6 +98,16 @@ class RCFG:
         'lambda_l1': 0.0,
         'lambda_l2': 0.011
      }
+    xgb_params = {
+        'objective': 'reg:squarederror',
+        'booster': 'gbtree',
+        'eval_metric': 'rmse',
+        'eta': 0.01, 
+        'min_child_weight': 1.0,
+        'max_depth': 5,
+        'lambda': 1.0,
+        'seed': 42
+    }
     additional_features = [
         "summary_length", 
         "splling_err_num",
@@ -140,6 +151,7 @@ class RCFG:
     scaling: bool = False
     join_metadata: bool = True
     wandb_api_key: Optional[str] = None
+    xgboost: bool = False
 
 class Logger:
 
@@ -1301,6 +1313,35 @@ class Runner():
             
             self.model_dict[target] = models
 
+            if RCFG.xgboost:
+                self.logger.info(f'Start training XGBoost model: {target}')
+
+                models = []
+                for fold in range(CFG.n_splits):
+
+                    X_train_cv = self.train[self.train["fold"] != fold][self.lgbm_columns]
+                    y_train_cv = self.train[self.train["fold"] != fold][target]
+
+                    X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
+                    y_eval_cv = self.train[self.train["fold"] == fold][target]
+
+                    dtrain = xgb.DMatrix(X_train_cv, label=y_train_cv)
+                    dval = xgb.DMatrix(X_eval_cv, label=y_eval_cv)
+
+                    evaluation_results = {}
+                    model = xgb.train(
+                        RCFG.xgb_params,
+                        num_boost_round=10000,
+                        evals=[(dtrain, 'train'), (dval, 'valid')],
+                        callbacks=[
+                            xgb.callback.early_stop(30),
+                            xgb.callback.record_evaluation(evaluation_results)
+                        ],
+                    )
+                    models.append(model)
+                
+                self.model_dict[f'{target}_xgb'] = models
+
         # cv
         rmses = []
 
@@ -1319,6 +1360,22 @@ class Runner():
 
                 trues.extend(y_eval_cv)
                 preds.extend(pred)
+
+            if RCFG.xgboost:
+                models = self.model_dict[f'{target}_xgb']
+
+                preds_tmp = []
+                for fold, model in enumerate(models):
+                    X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
+                    y_eval_cv = self.train[self.train["fold"] == fold][target]
+
+                    dval = xgb.DMatrix(X_eval_cv, label=y_eval_cv)
+                    pred = model.predict(dval)
+
+                    trues.extend(y_eval_cv)
+                    preds_tmp.extend(pred)
+                
+                preds = (np.array(preds) + np.array(preds_tmp)) / 2
                 
             rmse = np.sqrt(mean_squared_error(trues, preds))
             self.logger.info(f"{target}_rmse : {rmse}")
