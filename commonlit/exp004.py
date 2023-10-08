@@ -1325,7 +1325,7 @@ class Runner():
                     X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
                     y_eval_cv = self.train[self.train["fold"] == fold][target]
 
-                    dtrain = xgb.DMatrix(X_train_cv, label=y_train_cv)
+                    dtrain = xgb.DMatrix(X_train_cv, label=y_train_cv,  enable_categorical=True)
                     dval = xgb.DMatrix(X_eval_cv, label=y_eval_cv)
 
                     evaluation_results = {}
