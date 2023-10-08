@@ -1297,6 +1297,7 @@ class Runner():
                         valid_names=['train', 'valid'],
                         train_set=dtrain,
                         valid_sets=dval,
+                        verbose_eval=False,
                         callbacks=[
                             lgb.early_stopping(stopping_rounds=30, verbose=False),
                             lgb.log_evaluation(-1),
