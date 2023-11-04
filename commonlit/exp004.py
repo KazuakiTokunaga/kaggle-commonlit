@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import json
 import time
+import xgboost as xgb
 from textblob import TextBlob
 import datetime
 from pickle import dump, load
@@ -60,6 +61,7 @@ class CFG:
     several_layer: bool=False
     cls_pooling: bool=False
     additional_features: bool=True
+    automodel: bool = False
 
 class RCFG:
     run_name: str = 'run'
@@ -96,9 +98,19 @@ class RCFG:
         'lambda_l1': 0.0,
         'lambda_l2': 0.011
      }
+    xgb_params = {
+        'objective': 'reg:squarederror',
+        'booster': 'gbtree',
+        'eval_metric': 'rmse',
+        'eta': 0.01, 
+        'min_child_weight': 1.0,
+        'max_depth': 5,
+        'lambda': 1.0,
+        'seed': 42
+    }
     additional_features = [
         "summary_length", 
-        "splling_err_num", 
+        "splling_err_num",
         "word_overlap_count",
         "bigram_overlap_count",
         "bigram_overlap_ratio",
@@ -139,6 +151,7 @@ class RCFG:
     scaling: bool = False
     join_metadata: bool = True
     wandb_api_key: Optional[str] = None
+    xgboost: bool = False
 
 class Logger:
 
@@ -515,16 +528,6 @@ class Preprocessor:
         input_df['punctuation_sum'] = input_df['punctuation_ratios'].apply(lambda x: np.sum(list(x.values())))
 
         df_features = input_df[RCFG.additional_features].copy()
-        
-        if RCFG.scaling:
-            if mode == 'train':
-                scaler = StandardScaler()
-                input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
-                dump(scaler, open(f"{RCFG.model_dir}/scaler.pkl", "wb"))
-            else:
-                scaler = load(open(f"{RCFG.model_dir}/scaler.pkl", "rb"))
-                input_df[RCFG.additional_features] = scaler.fit_transform(df_features)
-
 
         return input_df.drop(columns=["summary_tokens", "prompt_length", "pos_ratios", "punctuation_ratios"])
 
@@ -533,29 +536,6 @@ def compute_metrics(eval_pred):
     predictions, labels = eval_pred
     rmse = mean_squared_error(labels, predictions, squared=False)
     return {"rmse": rmse}
-
-
-def compute_mcrmse(eval_pred):
-    """
-    Calculates mean columnwise root mean squared error
-    https://www.kaggle.com/competitions/commonlit-evaluate-student-summaries/overview/evaluation
-    """
-    preds, labels = eval_pred
-
-    col_rmse = np.sqrt(np.mean((preds - labels) ** 2, axis=0))
-    mcrmse = np.mean(col_rmse)
-
-    return {
-        "content_rmse": col_rmse[0],
-        "wording_rmse": col_rmse[1],
-        "mcrmse": mcrmse,
-    }
-
-def compt_score(content_true, content_pred, wording_true, wording_pred):
-    content_score = mean_squared_error(content_true, content_pred)**(1/2)
-    wording_score = mean_squared_error(wording_true, wording_pred)**(1/2)
-    
-    return (content_score + wording_score)/2
 
 
 class RMSELoss(nn.Module):
@@ -569,7 +549,7 @@ class RMSELoss(nn.Module):
         return loss
 
 class MCRMSELoss(nn.Module):
-    def __init__(self, num_scored=2):
+    def __init__(self, num_scored=1):
         super().__init__()
         self.rmse = RMSELoss()
         self.num_scored = num_scored
@@ -581,20 +561,19 @@ class MCRMSELoss(nn.Module):
 
         return score
 
-# dropout食わせるべき？
 class CustomTransformersModel(nn.Module):
     def __init__(
             self, 
             base_model, 
             additional_features_dim, 
             n_freeze = 0, 
-            dropout=0.2
+            dropout=0.1
         ):
         super(CustomTransformersModel, self).__init__()
         self.base_model = base_model
         self.additional_features_dim = additional_features_dim
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(base_model.config.hidden_size, 2)
+        self.classifier = nn.Linear(base_model.config.hidden_size, 1)
 
         # freezing embeddings layer
         if n_freeze:
@@ -621,7 +600,7 @@ class CustomTransformersModel(nn.Module):
         else:
             base_model_output = outputs[0][:, 0, :]
         
-        logits = self.classifier(base_model_output)
+        logits = self.classifier(self.dropout(base_model_output))
 
         if labels is not None:
             loss = self.creterion(logits, labels)
@@ -636,13 +615,13 @@ class CustomTransformersModelV2(nn.Module):
             base_model, 
             additional_features_dim, 
             n_freeze = 0, 
-            dropout=0.2
+            dropout=0.1
         ):
         super(CustomTransformersModelV2, self).__init__()
         self.base_model = base_model
         self.additional_features_dim = additional_features_dim
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(base_model.config.hidden_size*4, 2)
+        self.classifier = nn.Linear(base_model.config.hidden_size*4, 1)
 
         # freezing embeddings layer
         if n_freeze:
@@ -659,60 +638,7 @@ class CustomTransformersModelV2(nn.Module):
         outputs = self.base_model(input_ids, attention_mask=attention_mask)
         base_model_output = torch.cat(outputs.hidden_states[-4:], 2)[:, 0, :]
         
-        logits = self.classifier(base_model_output)
-
-        if labels is not None:
-            loss = self.creterion(logits, labels)
-            return {"loss": loss, "logits": logits}
-
-        return {"logits": logits}
-
-
-# cls_plooling
-class CustomTransformersModelV3(nn.Module):
-    def __init__(
-            self, 
-            base_model, 
-            additional_features_dim, 
-            n_freeze = 0, 
-            dropout=0.2
-        ):
-        super(CustomTransformersModelV3, self).__init__()
-        self.base_model = base_model
-        self.additional_features_dim = additional_features_dim
-        self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(base_model.config.hidden_size*3, 2)
-
-        # freezing embeddings layer
-        if n_freeze:
-            self.base_model.embeddings.requires_grad_(False)
-        
-            #freezing the initial N layers
-            for i in range(0, n_freeze, 1):
-                for n,p in self.base_model.encoder.layer[i].named_parameters():
-                    p.requires_grad = False
-
-        self.creterion = MCRMSELoss()
-
-    def forward(self, input_ids, attention_mask=None, labels=None):
-        outputs = self.base_model(input_ids, attention_mask=attention_mask)
-
-        last_hidden_state = outputs[0]
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
-        sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
-        sum_mask = input_mask_expanded.sum(1)
-        sum_mask = torch.clamp(sum_mask, min=1e-9)
-        mean_pooling = sum_embeddings / sum_mask
-
-        mask = (1 - input_mask_expanded)
-        hidden_state = last_hidden_state - mask * 1e3
-        max_pooling =  torch.max(hidden_state, 1)[0]
-
-        cls = last_hidden_state[:, 0, :]
-
-        base_model_output = torch.cat((mean_pooling, max_pooling, cls), 1)
-
-        logits = self.classifier(base_model_output)
+        logits = self.classifier(self.dropout(base_model_output))
 
         if labels is not None:
             loss = self.creterion(logits, labels)
@@ -727,7 +653,7 @@ class ScoreRegressor:
         model_name: str,
         model_dir: str,
         inputs: List[str],
-        target_cols: List[str],
+        target: str,
         hidden_dropout_prob: float,
         attention_probs_dropout_prob: float,
         max_length: int,
@@ -737,7 +663,7 @@ class ScoreRegressor:
 
         self.input_col = "input"        
         self.input_text_cols = inputs 
-        self.target_cols = target_cols
+        self.target = target
         self.additional_feature_cols = RCFG.additional_features
 
         self.model_name = model_name
@@ -750,10 +676,14 @@ class ScoreRegressor:
         self.model_config.update({
             "hidden_dropout_prob": hidden_dropout_prob,
             "attention_probs_dropout_prob": attention_probs_dropout_prob,
-            "num_labels": 2,
-            "problem_type": "regression",
-            "output_hidden_states": True
+            "num_labels": 1,
+            "problem_type": "regression"
         })
+
+        if CFG.several_layer:
+            self.model_config.update({
+                "output_hidden_states": True
+            })
         
         seed_everything(seed=42)
 
@@ -767,7 +697,7 @@ class ScoreRegressor:
         return sep.join(row[self.input_text_cols])
 
     def tokenize_function(self, examples: pd.DataFrame):
-        labels = [examples["content"], examples["wording"]]
+        labels = [examples[self.target]]
         tokenized = self.tokenizer(examples[self.input_col],
                         padding="max_length",
                         truncation=True,
@@ -791,19 +721,18 @@ class ScoreRegressor:
             config=self.model_config
         )
 
-        if CFG.cls_pooling:
-            self.logger.info('Use CustomTransformerModelV3 with cls_pooling.')
-            custom_model = CustomTransformersModelV3(
-                model_content,
-                additional_features_dim=len(self.additional_feature_cols),
-                n_freeze=CFG.n_freeze
-            )
-        elif CFG.several_layer:
+        if CFG.several_layer:
             self.logger.info('Use CustomTransformerModelV3 with last 4 transformer layers.')
             custom_model = CustomTransformersModelV2(
                 model_content,
                 additional_features_dim=len(self.additional_feature_cols),
                 n_freeze=CFG.n_freeze
+            )
+        elif CFG.automodel:
+            self.logger.info('Use AutoModelForSequenceClassification.')
+            custom_model = AutoModelForSequenceClassification.from_pretrained(
+                f"{RCFG.base_model_dir}", 
+                config=self.model_config
             )
         else:
             if CFG.mean_pooling:
@@ -834,8 +763,8 @@ class ScoreRegressor:
         train_df[self.input_col] = train_df.apply(self.concatenate_with_sep_token, axis=1)
         valid_df[self.input_col] = valid_df.apply(self.concatenate_with_sep_token, axis=1) 
         
-        train_df = train_df[[self.input_col] + self.target_cols]
-        valid_df = valid_df[[self.input_col] + self.target_cols]
+        train_df = train_df[[self.input_col] + [self.target]]
+        valid_df = valid_df[[self.input_col] + [self.target]]
         
         custom_model = self.get_custom_model()
 
@@ -864,7 +793,7 @@ class ScoreRegressor:
             evaluation_strategy="steps",
             eval_steps=save_steps,
             save_steps=save_steps,
-            metric_for_best_model="mcrmse",
+            metric_for_best_model="rmse",
             fp16=True,
             save_total_limit=1
             # gradient_checkpointing=True
@@ -876,7 +805,7 @@ class ScoreRegressor:
             train_dataset=train_tokenized_datasets,
             eval_dataset=val_tokenized_datasets,
             tokenizer=self.tokenizer,
-            compute_metrics=compute_mcrmse,
+            compute_metrics=compute_metrics,
             data_collator=self.data_collator
         )
 
@@ -912,7 +841,7 @@ class ScoreRegressor:
             output_dir=".",
             do_train = False,
             do_predict = True,
-            per_device_eval_batch_size=1,
+            per_device_eval_batch_size=12,
             dataloader_drop_last = False,
             fp16=True,
             save_strategy="no"
@@ -927,13 +856,7 @@ class ScoreRegressor:
         )
 
         preds = infer_content.predict(test_tokenized_dataset)[0]
-        pred_df = pd.DataFrame(
-                    preds, 
-                    columns=[
-                        f"content_pred", 
-                        f"wording_pred"
-                    ]
-                )
+        pred_df = pd.DataFrame(preds, columns=[f"{self.target}_pred"])
         
         custom_model.cpu()
         del custom_model
@@ -967,42 +890,45 @@ def train_by_fold(
     if os.path.exists(model_dir):
         shutil.rmtree(model_dir)
     os.makedirs(model_dir)
-        
-    for fold in range(CFG.n_splits):
-        logger.info(f"fold {fold}:")
-        
-        train_data = train_df[train_df["fold"] != fold]
-        valid_data = train_df[train_df["fold"] == fold]
 
-        if RCFG.use_aug_data: 
-            logger.info('Augment data by back translation.')
-            train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
-            train_data = pd.concat([train_data, train_aug_data])
-        
-        fold_model_dir = f'{model_dir}/fold_{fold}'
-        csr = ScoreRegressor(
-            model_name=model_name,
-            target_cols=targets,
-            inputs= inputs,
-            model_dir = fold_model_dir, 
-            hidden_dropout_prob=hidden_dropout_prob,
-            attention_probs_dropout_prob=attention_probs_dropout_prob,
-            max_length=max_length,
-            logger=logger
-        )
-        
-        csr.train(
-            fold=fold,
-            train_df=train_data,
-            valid_df=valid_data, 
-            batch_size=batch_size,
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            num_train_epochs=num_train_epochs,
-            save_steps=save_steps,
-        )
+    for target in targets:
+        logger.info(f'target: {target}.')
 
-        print_gpu_utilization(logger)
+        for fold in range(CFG.n_splits):
+            logger.info(f"fold {fold}:")
+            
+            train_data = train_df[train_df["fold"] != fold]
+            valid_data = train_df[train_df["fold"] == fold]
+
+            if RCFG.use_aug_data and target == 'content': 
+                logger.info('Augment data by back translation.')
+                train_aug_data = df_augtrain[df_augtrain["fold"] != fold]
+                train_data = pd.concat([train_data, train_aug_data])
+            
+            fold_model_dir = f'{model_dir}/{target}/fold_{fold}'
+            csr = ScoreRegressor(
+                model_name=model_name,
+                target=target,
+                inputs= inputs,
+                model_dir = fold_model_dir, 
+                hidden_dropout_prob=hidden_dropout_prob,
+                attention_probs_dropout_prob=attention_probs_dropout_prob,
+                max_length=max_length,
+                logger=logger
+            )
+            
+            csr.train(
+                fold=fold,
+                train_df=train_data,
+                valid_df=valid_data, 
+                batch_size=batch_size,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                num_train_epochs=num_train_epochs,
+                save_steps=save_steps,
+            )
+
+            print_gpu_utilization(logger)
 
 def validate(
     logger,
@@ -1019,31 +945,33 @@ def validate(
 
     columns = list(train_df.columns.values)
     
-    for fold in range(CFG.n_splits):
-        logger.info(f"fold {fold}:")
-        
-        valid_data = train_df[train_df["fold"] == fold]
-        
-        model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
-        
-        csr = ScoreRegressor(
-            model_name=model_name,
-            target_cols=targets,
-            inputs= inputs,
-            model_dir = model_dir,
-            hidden_dropout_prob=hidden_dropout_prob,
-            attention_probs_dropout_prob=attention_probs_dropout_prob,
-            max_length=max_length,
-            logger=logger
-           )
-        
-        pred_df = csr.predict(
-            test_df=valid_data, 
-            batch_size=batch_size
-        )
+    for target in targets:
+        logger.info(f'target: {target}.')
 
-        train_df.loc[valid_data.index, f"content_pred"] = pred_df[f"content_pred"].values
-        train_df.loc[valid_data.index, f"wording_pred"] = pred_df[f"wording_pred"].values
+        for fold in range(CFG.n_splits):
+            logger.info(f"fold {fold}:")
+            
+            valid_data = train_df[train_df["fold"] == fold]
+            
+            model_dir =  f"{RCFG.model_dir}/{model_name}/{target}/fold_{fold}"
+            
+            csr = ScoreRegressor(
+                model_name=model_name,
+                target=target,
+                inputs= inputs,
+                model_dir = model_dir,
+                hidden_dropout_prob=hidden_dropout_prob,
+                attention_probs_dropout_prob=attention_probs_dropout_prob,
+                max_length=max_length,
+                logger=logger
+            )
+            
+            pred_df = csr.predict(
+                test_df=valid_data, 
+                batch_size=batch_size
+            )
+
+            train_df.loc[valid_data.index, f"{target}_pred"] = pred_df[f"{target}_pred"].values
                 
     for target_pred in ["content_pred", "wording_pred"]:
         if target_pred not in columns: columns.append(target_pred)
@@ -1066,37 +994,38 @@ def predict(
     
     columns = list(test_df.columns.values)
 
-    for fold in range(CFG.n_splits):
-        logger.info(f"fold {fold}:")
-        
-        model_dir =  f"{RCFG.model_dir}/{model_name}/fold_{fold}"
-        logger.info(f'prediction model dir: {model_dir}.')
+    for target in targets:
+        logger.info(f'target: {target}.')
 
-        csr = ScoreRegressor(
-            model_name=model_name,
-            target_cols=targets,
-            inputs= inputs,
-            model_dir = model_dir, 
-            hidden_dropout_prob=hidden_dropout_prob,
-            attention_probs_dropout_prob=attention_probs_dropout_prob,
-            max_length=max_length,
-            logger=logger
-           )
+        for fold in range(CFG.n_splits):
+            logger.info(f"fold {fold}:")
+            
+            model_dir =  f"{RCFG.model_dir}/{model_name}/{target}/fold_{fold}"
+            logger.info(f'prediction model dir: {model_dir}.')
 
-        pred_df = csr.predict(
-            test_df=test_df, 
-            batch_size=batch_size
-        )
+            csr = ScoreRegressor(
+                model_name=model_name,
+                target=target,
+                inputs= inputs,
+                model_dir = model_dir, 
+                hidden_dropout_prob=hidden_dropout_prob,
+                attention_probs_dropout_prob=attention_probs_dropout_prob,
+                max_length=max_length,
+                logger=logger
+            )
 
-        del csr
-        gc.collect()
-        torch.cuda.empty_cache()
+            pred_df = csr.predict(
+                test_df=test_df, 
+                batch_size=batch_size
+            )
 
-        test_df[f"content_pred_{fold}"] = pred_df[f"content_pred"].values
-        test_df[f"wording_pred_{fold}"] = pred_df[f"wording_pred"].values
+            del csr
+            gc.collect()
+            torch.cuda.empty_cache()
 
-    test_df[f"content_pred"] = test_df[[f"content_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
-    test_df[f"wording_pred"] = test_df[[f"wording_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+            test_df[f"{target}_pred_{fold}"] = pred_df[f"{target}_pred"].values
+
+        test_df[f"{target}_pred"] = test_df[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
 
     for target_pred in ["content_pred", "wording_pred"]:
         if target_pred not in columns: columns.append(target_pred)
@@ -1248,6 +1177,8 @@ class Runner():
             del self.prompts_test
             del self.summaries_test
             gc.collect()
+
+            self.test.to_csv('test_preprocessed.csv', index=False)
         
         del preprocessor
         gc.collect()
@@ -1331,7 +1262,8 @@ class Runner():
                 max_length=CFG.max_length
             )
 
-
+            id = RCFG.model_dir[-2:]
+            self.test[['student_id', 'content_pred', 'wording_pred']].to_csv(f'{id}_tmp.csv', index=False) 
             print_gpu_utilization(self.logger)
         
         if RCFG.train:
@@ -1381,6 +1313,34 @@ class Runner():
             
             self.model_dict[target] = models
 
+            if RCFG.xgboost:
+                self.logger.info(f'Start training XGBoost model: {target}')
+
+                models = []
+                for fold in range(CFG.n_splits):
+
+                    X_train_cv = self.train[self.train["fold"] != fold][self.lgbm_columns]
+                    y_train_cv = self.train[self.train["fold"] != fold][target]
+
+                    X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
+                    y_eval_cv = self.train[self.train["fold"] == fold][target]
+
+                    dtrain = xgb.DMatrix(X_train_cv, label=y_train_cv,  enable_categorical=True)
+                    dval = xgb.DMatrix(X_eval_cv, label=y_eval_cv,  enable_categorical=True)
+
+                    evaluation_results = {}
+                    model = xgb.train(
+                        RCFG.xgb_params,
+                        dtrain,
+                        num_boost_round=10000,
+                        evals=[(dtrain, 'train'), (dval, 'valid')],
+                        early_stopping_rounds=30,
+                        verbose_eval=False
+                    )
+                    models.append(model)
+                
+                self.model_dict[f'{target}_xgb'] = models
+
         # cv
         rmses = []
 
@@ -1399,6 +1359,21 @@ class Runner():
 
                 trues.extend(y_eval_cv)
                 preds.extend(pred)
+
+            if RCFG.xgboost:
+                models = self.model_dict[f'{target}_xgb']
+
+                preds_tmp = []
+                for fold, model in enumerate(models):
+                    X_eval_cv = self.train[self.train["fold"] == fold][self.lgbm_columns]
+                    y_eval_cv = self.train[self.train["fold"] == fold][target]
+
+                    dval = xgb.DMatrix(X_eval_cv, label=y_eval_cv,  enable_categorical=True)
+                    pred = model.predict(dval)
+
+                    preds_tmp.extend(pred)
+                
+                preds = np.array([preds, preds_tmp]).mean(axis=0)
                 
             rmse = np.sqrt(mean_squared_error(trues, preds))
             self.logger.info(f"{target}_rmse : {rmse}")
@@ -1451,15 +1426,28 @@ class Runner():
 
                 pred = model.predict(X_eval_cv)
                 preds.append(pred)
-            
+
+            if RCFG.xgboost:
+                self.logger.info(f'Start predicting XGBoost model: {target}')
+                models = self.model_dict[f'{target}_xgb']
+
+                for fold, model in enumerate(models):
+                    X_eval_cv = self.test[self.lgbm_columns]
+                    dval = xgb.DMatrix(X_eval_cv, enable_categorical=True)
+                    pred = model.predict(dval)
+
+                    preds.append(pred)
+
             pred_dict[target] = preds
 
         for target in self.targets:
             preds = pred_dict[target]
+            cnt = 0
             for i, pred in enumerate(preds):
                 self.test[f"{target}_pred_{i}"] = pred
+                cnt += 1
 
-            self.test[target] = self.test[[f"{target}_pred_{fold}" for fold in range(CFG.n_splits)]].mean(axis=1)
+            self.test[target] = self.test[[f"{target}_pred_{fold}" for fold in range(cnt)]].mean(axis=1)
 
         self.test[["student_id", "content", "wording"]].to_csv(filename, index=False)
 
